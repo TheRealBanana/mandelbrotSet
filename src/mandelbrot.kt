@@ -5,11 +5,25 @@ import org.lwjgl.opengl.GL11
 import org.lwjgl.opengl.GL11.*
 import org.lwjgl.system.MemoryUtil
 import java.lang.Math.pow
+import kotlin.math.sin
+import kotlin.math.cos
 import kotlin.math.sqrt
 
 //auto calculate point size by looking at resolution limit?
 // distance between two points separated by resolution limit
 // have to calculate the actual display coordinates from the point locations
+
+//OK So we want to know how many pixels span one tick of the RESOLUTION_LIMIT_* values
+//That should
+
+//movement amount should be percentage of screen width
+
+//Ok so the way we are going to handle zooming/panning is by setting an origin and bound
+//Zoomed all the way out is x=-2, y=1
+var CURRENT_X_LIM: Double = -2.0
+var CURRENT_Y_LIM: Double = 1.0
+var ORIGIN_X: Double = CURRENT_X_LIM
+var ORIGIN_Y: Double = CURRENT_Y_LIM
 
 
 //GL STUFFS
@@ -26,6 +40,9 @@ const val RESOLUTION_LIMIT_X: Double = 0.01
 const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 100
 
 data class Color(val r: Double, val g: Double, val b: Double)
+
+
+
 
 data class ComplexNumber(var real: Double, var imag: Double) {
     operator fun minus(c: ComplexNumber): ComplexNumber { return ComplexNumber(real-c.real, imag-c.imag)}
@@ -90,7 +107,7 @@ fun mandelbrotsimple(): Map<ComplexNumber, Color> {
     val cordlist = mutableMapOf<ComplexNumber, Color>()
     //Scanning left to right then top to bottom
     //outer loop, top to bottom, Imaginary coord, y
-    while (curImagCoord in -1.0..1.0) {
+    while (curImagCoord in -CURRENT_Y_LIM..CURRENT_Y_LIM) {
         var real: Double = -2.0
         while (real in -2.0..1.0) {
             //doing stuffs, mandelbrot-ey stuff
@@ -99,7 +116,7 @@ fun mandelbrotsimple(): Map<ComplexNumber, Color> {
                 cordlist[ComplexNumber(real, curImagCoord)] = Color(0.0,0.0,0.0) //Black color, inside the set
             } //in the set, bounded value
             else {
-                cordlist[ComplexNumber(real, curImagCoord)] = Color(escapevelocity/ESCAPE_VELOCITY_TEST_ITERATIONS,0.0,0.0) //Black color, inside the set
+                cordlist[ComplexNumber(real, curImagCoord)] = Color(escapevelocity/ESCAPE_VELOCITY_TEST_ITERATIONS,cos(escapevelocity),sin(escapevelocity/ESCAPE_VELOCITY_TEST_ITERATIONS)) //Black color, inside the set
             }
             real += RESOLUTION_LIMIT_X
         }
