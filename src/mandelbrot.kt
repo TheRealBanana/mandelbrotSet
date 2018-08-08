@@ -5,13 +5,12 @@ import org.lwjgl.opengl.GL11
 import org.lwjgl.opengl.GL11.*
 import org.lwjgl.system.MemoryUtil
 import java.lang.Math.pow
-import kotlin.math.sin
-import kotlin.math.cos
 import kotlin.math.sqrt
+import kotlin.math.tan
 
 //Zoom/pan increment stuffs
 const val ZOOM_INCREMENT = 0.3 //increase by 0.3
-const val PAN_PCT_INCREMENT = 0.15 //Move view by 15%
+const val PAN_PCT_INCREMENT = 0.25 //Move view by 25%
 
 //GL STUFFS
 const val WINDOW_SIZE_WIDTH = 1680
@@ -19,13 +18,10 @@ const val WINDOW_SIZE_HEIGHT = 1050
 
 var window: Long = NULL
 
-//WORRY ABOUT RESOLUTION (diff per iteration x and y)
-//This will go away completely with zooming since we need to dynamically
-//set our resolution and pixel size limits.
-//0.01 with a width of 3 results in 300 iterations.
-//Our width (1680) divided by 300 = our pixel point size (5.6)
-const val RESOLUTION_LIMIT_Y: Double = 0.01
-const val RESOLUTION_LIMIT_X: Double = 0.01
+//This defines the resolution limit of our drawing.
+// A value of 1 draws every single pixel
+// A larger values increases the size of each point drawn (decreasing resolution).
+const val POINT_SIZE: Int = 2
 
 //How many iterations should we run before we are certain of an escape velocity?
 const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 50
@@ -47,7 +43,7 @@ data class ComplexNumber(val real: Double, val imag: Double) {
 }
 
 
-class mandelbrotView(private val window: Long) {
+class MandelbrotView(private val window: Long) {
     init {
         glfwSetKeyCallback(window, this::glfwKeypressCallback)
     }
@@ -59,6 +55,16 @@ class mandelbrotView(private val window: Long) {
     private var BOUND_BOTTOM: Double = -1.0
     private var BOUND_LEFT: Double = -2.0
     private var BOUND_RIGHT: Double = 1.0
+    private var RESOLUTION_LIMIT_X: Double = -1.0
+    private var RESOLUTION_LIMIT_Y: Double = -1.0
+    
+    private fun calcResolutionLimit() {
+        //Calculate our resolution limits based on the defined point size
+        val xslices: Double = WINDOW_SIZE_WIDTH/POINT_SIZE.toDouble()
+        val yslices: Double = WINDOW_SIZE_HEIGHT/POINT_SIZE.toDouble()
+        RESOLUTION_LIMIT_X = (BOUND_RIGHT-BOUND_LEFT)/xslices
+        RESOLUTION_LIMIT_Y = (BOUND_TOP-BOUND_BOTTOM)/yslices
+    }
 
 
     @Suppress("UNUSED_PARAMETER")
@@ -66,19 +72,19 @@ class mandelbrotView(private val window: Long) {
         if (action == GLFW_PRESS || action == GLFW_REPEAT)
             when (key) {
                 GLFW_KEY_UP -> {
-                    BOUND_TOP += BOUND_TOP*PAN_PCT_INCREMENT
+                    BOUND_TOP += (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
                 }
                 GLFW_KEY_DOWN -> {
-                    BOUND_TOP -= BOUND_TOP*PAN_PCT_INCREMENT
+                    BOUND_TOP -= (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
                 }
                 GLFW_KEY_LEFT -> {
-                    BOUND_LEFT -= BOUND_TOP*PAN_PCT_INCREMENT
+                    BOUND_LEFT -= (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
                 }
                 GLFW_KEY_RIGHT -> {
-                    BOUND_LEFT += BOUND_TOP*PAN_PCT_INCREMENT
+                    BOUND_LEFT += (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
                 }
-                GLFW_KEY_KP_ADD -> currentZoomLevel += ZOOM_INCREMENT
-                GLFW_KEY_KP_SUBTRACT -> currentZoomLevel -= ZOOM_INCREMENT
+                GLFW_KEY_KP_ADD -> currentZoomLevel += currentZoomLevel*ZOOM_INCREMENT
+                GLFW_KEY_KP_SUBTRACT -> currentZoomLevel -= currentZoomLevel*ZOOM_INCREMENT
                 GLFW_KEY_KP_0 -> resetAll()
             }
         updateView()
@@ -113,6 +119,7 @@ class mandelbrotView(private val window: Long) {
         //will clean this up later
         //real and imaginary parts, x and y respectively.
         //Starting in the top left (-2, 1)
+        calcResolutionLimit()
         var curImagCoord: Double = BOUND_TOP
         val cordlist = mutableMapOf<ComplexNumber, Color>()
         //Scanning left to right then top to bottom
@@ -126,10 +133,11 @@ class mandelbrotView(private val window: Long) {
                     cordlist[ComplexNumber(real, curImagCoord)] = Color(0.0,0.0,0.0) //Black color, inside the set
                 }
                 else {
-                    cordlist[ComplexNumber(real, curImagCoord)] = Color(escapevelocity/ESCAPE_VELOCITY_TEST_ITERATIONS,cos(escapevelocity),sin(escapevelocity/ESCAPE_VELOCITY_TEST_ITERATIONS))
+                    cordlist[ComplexNumber(real, curImagCoord)] = Color(escapevelocity/ESCAPE_VELOCITY_TEST_ITERATIONS,0.0, tan(escapevelocity/ESCAPE_VELOCITY_TEST_ITERATIONS))
                 }
                 real += RESOLUTION_LIMIT_X
             }
+
             curImagCoord -= RESOLUTION_LIMIT_Y
         }
         println("Finished iterating over the Imaginary axis.")
@@ -167,7 +175,7 @@ fun findEscapeVelocity(c: ComplexNumber): Double {
 fun main(args: Array<String>) {
     init()
     println("Generating simple Mandelbrot set (this could take a while)...")
-    val viewControl = mandelbrotView(window)
+    val viewControl = MandelbrotView(window)
     viewControl.redrawView()
     //and wait for any keyboard stuffs now
     while (!glfwWindowShouldClose(window)) {
