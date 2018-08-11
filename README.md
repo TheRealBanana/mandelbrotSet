@@ -15,6 +15,7 @@ Found an interesting coloring scheme using sine and cosine functions with the es
 I forgot that adjusting the max number of iterations produces better (and slower) results at higher numbers. 
 Here's some results @1000 iteration limit (instead of the above 50-iteration limit):
 ![Screenshot](https://i.imgur.com/ihgfHYO.png)
-
+More pretty pictures....
+![Screenshot](https://i.imgur.com/lah8sKX.png)
 
 Reimplementing in GLSL will speed things up a bit but will take a lot of work. I'm hoping implementing basic threading will be enough of a speedup before I tackle using shaders.
