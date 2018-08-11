@@ -21,10 +21,10 @@ var window: Long = NULL
 //This defines the resolution limit of our drawing.
 // A value of 1 draws every single pixel
 // A larger values increases the size of each point drawn (decreasing resolution).
-const val POINT_SIZE: Int = 2
+const val POINT_SIZE: Int = 1
 
 //How many iterations should we run before we are certain of an escape velocity?
-const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 50
+const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 1000
 
 data class Color(val r: Double, val g: Double, val b: Double)
 data class WindowCoordinate(val x: Int, val y: Int)
