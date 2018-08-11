@@ -62,27 +62,37 @@ class MandelbrotView(private val window: Long) {
             when (key) {
                 GLFW_KEY_UP -> {
                     BOUND_TOP += (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
+                    updateView()
                 }
                 GLFW_KEY_DOWN -> {
                     BOUND_TOP -= (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
+                    updateView()
                 }
                 GLFW_KEY_LEFT -> {
                     BOUND_LEFT -= (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
+                    updateView()
                 }
                 GLFW_KEY_RIGHT -> {
                     BOUND_LEFT += (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
+                    updateView()
                 }
-                GLFW_KEY_KP_ADD -> currentZoomLevel += currentZoomLevel*ZOOM_INCREMENT
-                GLFW_KEY_KP_SUBTRACT -> currentZoomLevel -= currentZoomLevel*ZOOM_INCREMENT
+                GLFW_KEY_KP_ADD -> {
+                    currentZoomLevel += currentZoomLevel*ZOOM_INCREMENT
+                    updateView()
+                }
+                GLFW_KEY_KP_SUBTRACT -> {
+                    currentZoomLevel -= currentZoomLevel*ZOOM_INCREMENT
+                    updateView()
+                }
                 GLFW_KEY_KP_0 -> resetAll()
             }
-        updateView()
     }
 
     private fun resetAll() {
         BOUND_TOP = 1.0
         BOUND_LEFT = -2.0
         currentZoomLevel = 1.0
+        updateView()
     }
 
     private fun updateView() {
@@ -113,52 +123,52 @@ class MandelbrotView(private val window: Long) {
         return ComplexNumber(orthoX, orthoY)
     }
 
-    private fun mandelbrotsimple(): Map<WindowCoordinate, Color> {
-        //will clean this up later
-        //real and imaginary parts, x and y respectively.
-        //Drawing from bottom left to top right
-        val cordlist = mutableMapOf<WindowCoordinate, Color>()
+    private fun mandelbrotsimple() {
+        val starttime = System.currentTimeMillis()
+
+        glPointSize(POINT_SIZE.toFloat())
+        glClear(GL_COLOR_BUFFER_BIT)
+        glBegin(GL_POINTS)
+
         //Scanning left to right then bottom to top
         //outer loop, top to bottom, Imaginary coord, y
-
+        var calcnumber: Long = 0L
         var curYcoordinate = 0
         while (curYcoordinate in 0..WINDOW_SIZE_HEIGHT) {
             var curXcoordinate = 0
             while (curXcoordinate in 0..WINDOW_SIZE_WIDTH) {
+                calcnumber += 1
                 //doing stuffs, mandelbrot-ey stuff
 
                 //So now that I'm iterating over window coordinates instead of the imaginary plane coords I have to figure out the pixel
                 //sizing on my own. Best I've come up with so far but I'm sure there is better.
-
                 //First calculate this pixels color, then set the pixel color around us to the same depending on the point size
+
                 val curWindowCoords = WindowCoordinate(curXcoordinate, curYcoordinate)
                 val escapeVelocityColor: Color = findEscapeVelocity(getOrthoCoordsFromWindowCoords(curWindowCoords))
-                cordlist[curWindowCoords] = escapeVelocityColor
-                // Now run the calculations for surrounding pixels if necessary
+
+                glColor3d(escapeVelocityColor.r, escapeVelocityColor.g, escapeVelocityColor.b)
+                glVertex2i(curWindowCoords.x, curWindowCoords.y)
+                // Now set the color for surrounding pixels if necessary
+
                 if (POINT_SIZE > 1) {
                     for (dy in 0 until POINT_SIZE)
-                        for (dx in 1..POINT_SIZE)
-                            cordlist[WindowCoordinate(curWindowCoords.x+dx, curWindowCoords.y+dy)] = escapeVelocityColor
+                        for (dx in 0 until POINT_SIZE)
+                            glVertex2i(curWindowCoords.x+dx, curWindowCoords.y+dy)
                 }
+
                 curXcoordinate += POINT_SIZE
             }
             curYcoordinate += POINT_SIZE
         }
-        println("Finished iterating over the Imaginary axis.")
-        return cordlist
+        val totaltime = System.currentTimeMillis() - starttime
+        glEnd()
+        glfwSwapBuffers(window)
+        println("Finished iterating over the Imaginary axis. Took ${(System.currentTimeMillis() - starttime)} milliseconds and $calcnumber calculations total")
     }
 
     fun redrawView() {
-        glPointSize(POINT_SIZE.toFloat())
-        glClear(GL_COLOR_BUFFER_BIT)
-        glBegin(GL_POINTS)
-        val s = mandelbrotsimple()
-        for ((cord, color) in s) {
-            glColor3d(color.r, color.g, color.b)
-            glVertex2i(cord.x, cord.y)
-        }
-        glEnd()
-        glfwSwapBuffers(window)
+        mandelbrotsimple()
     }
 }
 
