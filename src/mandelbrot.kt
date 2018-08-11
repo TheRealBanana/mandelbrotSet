@@ -83,7 +83,6 @@ class MandelbrotView(private val window: Long) {
         BOUND_TOP = 1.0
         BOUND_LEFT = -2.0
         currentZoomLevel = 1.0
-        updateView()
     }
 
     private fun updateView() {
@@ -93,14 +92,6 @@ class MandelbrotView(private val window: Long) {
         val height: Double = currentZoomLevel * startHeight
         BOUND_BOTTOM = BOUND_TOP - height
         BOUND_RIGHT = BOUND_LEFT + (height * (3.0/2.0))
-        /*
-        ABSOLUTELY CRITICAL CALL! I was pulling my hair out over how to get pan/zoom working and
-        nothing was working correctly until I added this single call. Without this, calls to glOrtho
-        just modify the current projection matrix. By calling glLoadIdentity(), we load the identity
-        matrix first, essentially resetting us to the default state, before we reset our ortho matrix.
-        */
-        glLoadIdentity()
-        GL11.glOrtho(BOUND_LEFT, BOUND_RIGHT, BOUND_BOTTOM, BOUND_TOP, -1.0, 1.0)
         redrawView()
     }
 
