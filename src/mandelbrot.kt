@@ -5,12 +5,11 @@ import org.lwjgl.opengl.GL11
 import org.lwjgl.opengl.GL11.*
 import org.lwjgl.system.MemoryUtil
 import java.lang.Math.pow
-import kotlin.math.sqrt
-import kotlin.math.tan
+import kotlin.math.*
 
 //Zoom/pan increment stuffs
-const val ZOOM_INCREMENT = 0.3 //increase by 0.3
-const val PAN_PCT_INCREMENT = 0.25 //Move view by 25%
+const val ZOOM_INCREMENT = 0.3 //increase by X%
+const val PAN_PCT_INCREMENT = 0.25 //Move view by X%
 
 //GL STUFFS
 const val WINDOW_SIZE_WIDTH = 1680
@@ -21,10 +20,10 @@ var window: Long = NULL
 //This defines the resolution limit of our drawing.
 // A value of 1 draws every single pixel
 // A larger values increases the size of each point drawn (decreasing resolution).
-const val POINT_SIZE: Int = 1
+var POINT_SIZE: Int = 3
 
 //How many iterations should we run before we are certain of an escape velocity?
-const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 1000
+var ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 100
 
 data class Color(val r: Double, val g: Double, val b: Double)
 data class WindowCoordinate(val x: Int, val y: Int)
@@ -49,59 +48,85 @@ class MandelbrotView(private val window: Long) {
     }
 
     private var currentZoomLevel: Double = 1.0 //zoomed out at 100%
+    private var currentZoomLevelInt: Int = 1 //Just for looks
     private var startHeight: Double = 2.0
-    //Coords defined by top-left corner
     private var BOUND_TOP: Double = 1.0
     private var BOUND_BOTTOM: Double = -1.0
     private var BOUND_LEFT: Double = -2.0
     private var BOUND_RIGHT: Double = 1.0
+    private var currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
 
     @Suppress("UNUSED_PARAMETER")
     private fun glfwKeypressCallback(window: Long, key: Int, scancode: Int, action: Int, mods: Int) {
-        if (action == GLFW_PRESS || action == GLFW_REPEAT)
+        if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+            //needed later
+            val moveAmount: Double = currentZoomLevel*startHeight/2.0*PAN_PCT_INCREMENT
             when (key) {
                 GLFW_KEY_UP -> {
-                    BOUND_TOP += (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
+                    currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real, currentOrthoCoordinates.imag + moveAmount)
                     updateView()
                 }
                 GLFW_KEY_DOWN -> {
-                    BOUND_TOP -= (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
+                    currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real, currentOrthoCoordinates.imag - moveAmount)
                     updateView()
                 }
                 GLFW_KEY_LEFT -> {
-                    BOUND_LEFT -= (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
+                    currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real - moveAmount, currentOrthoCoordinates.imag)
                     updateView()
                 }
                 GLFW_KEY_RIGHT -> {
-                    BOUND_LEFT += (BOUND_TOP-BOUND_BOTTOM)/2*PAN_PCT_INCREMENT
+                    currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real + moveAmount, currentOrthoCoordinates.imag)
                     updateView()
                 }
                 GLFW_KEY_KP_ADD -> {
-                    currentZoomLevel += currentZoomLevel*ZOOM_INCREMENT
+                    currentZoomLevel += currentZoomLevel * ZOOM_INCREMENT
+                    currentZoomLevelInt--
                     updateView()
                 }
                 GLFW_KEY_KP_SUBTRACT -> {
-                    currentZoomLevel -= currentZoomLevel*ZOOM_INCREMENT
+                    currentZoomLevel -= currentZoomLevel * ZOOM_INCREMENT
+                    currentZoomLevelInt++
                     updateView()
                 }
+                GLFW_KEY_LEFT_BRACKET -> {
+                    POINT_SIZE--
+                    if (POINT_SIZE == 0) POINT_SIZE = 1
+                    updateView()
+                }
+                GLFW_KEY_RIGHT_BRACKET -> {
+                    POINT_SIZE++
+                    updateView()
+                }
+                GLFW_KEY_MINUS -> {
+                    ESCAPE_VELOCITY_TEST_ITERATIONS -= 50
+                    if (ESCAPE_VELOCITY_TEST_ITERATIONS < 0) ESCAPE_VELOCITY_TEST_ITERATIONS = 0
+                    updateView()
+                }
+                GLFW_KEY_EQUAL -> {
+                    ESCAPE_VELOCITY_TEST_ITERATIONS += 50
+                    updateView()
+                }
+
                 GLFW_KEY_KP_0 -> resetAll()
             }
+        }
     }
 
     private fun resetAll() {
         BOUND_TOP = 1.0
         BOUND_LEFT = -2.0
         currentZoomLevel = 1.0
+        currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
         updateView()
     }
 
     private fun updateView() {
-        //This function is called whenever we pan or zoom. When we zoom we dont change the top-left
-        //bounds so no need to update them. When we pan we have already changed those coordinates
-        //so the only thing left to update in any case are the bottom and right bounds.
         val height: Double = currentZoomLevel * startHeight
+        val width: Double = height*3.0/2.0
+        BOUND_LEFT = currentOrthoCoordinates.real-width/2
+        BOUND_TOP = currentOrthoCoordinates.imag+height/2
         BOUND_BOTTOM = BOUND_TOP - height
-        BOUND_RIGHT = BOUND_LEFT + (height * (3.0/2.0))
+        BOUND_RIGHT = BOUND_LEFT + width
         redrawView()
     }
 
@@ -132,7 +157,7 @@ class MandelbrotView(private val window: Long) {
 
         //Scanning left to right then bottom to top
         //outer loop, top to bottom, Imaginary coord, y
-        var calcnumber: Long = 0L
+        var calcnumber: Long = 0
         var curYcoordinate = 0
         while (curYcoordinate in 0..WINDOW_SIZE_HEIGHT) {
             var curXcoordinate = 0
@@ -161,13 +186,15 @@ class MandelbrotView(private val window: Long) {
             }
             curYcoordinate += POINT_SIZE
         }
-        val totaltime = System.currentTimeMillis() - starttime
         glEnd()
         glfwSwapBuffers(window)
-        println("Finished iterating over the Imaginary axis. Took ${(System.currentTimeMillis() - starttime)} milliseconds and $calcnumber calculations total")
+        println("Done! Took ${(System.currentTimeMillis() - starttime)} milliseconds to generate $calcnumber pixels")
+        glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt :: Point size: $POINT_SIZE ::  Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS")
     }
 
     fun redrawView() {
+        println("Generating simple Mandelbrot set at Coords: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag})  Zoomlevel: $currentZoomLevelInt  Point size: $POINT_SIZE  Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS  (this could take a while)...")
+        glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt} :: Point size: $POINT_SIZE :: Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS  ::  Generating...")
         mandelbrotsimple()
     }
 }
@@ -188,7 +215,6 @@ fun findEscapeVelocity(c: ComplexNumber): Color {
 
 fun main(args: Array<String>) {
     init()
-    println("Generating simple Mandelbrot set (this could take a while)...")
     val viewControl = MandelbrotView(window)
     viewControl.redrawView()
     //and wait for any keyboard stuffs now
