@@ -121,12 +121,12 @@ class MandelbrotView(private val window: Long) {
                     updateView()
                 }
                 GLFW_KEY_MINUS -> {
-                    ESCAPE_VELOCITY_TEST_ITERATIONS -= 50
+                    ESCAPE_VELOCITY_TEST_ITERATIONS -= 20
                     if (ESCAPE_VELOCITY_TEST_ITERATIONS < 0) ESCAPE_VELOCITY_TEST_ITERATIONS = 0
                     updateView()
                 }
                 GLFW_KEY_EQUAL -> {
-                    ESCAPE_VELOCITY_TEST_ITERATIONS += 50
+                    ESCAPE_VELOCITY_TEST_ITERATIONS += 20
                     updateView()
                 }
                 //Color mode keys, A and S for now

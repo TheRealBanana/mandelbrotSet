@@ -17,5 +17,10 @@ Here's some results @1000 iteration limit (instead of the above 50-iteration lim
 ![Screenshot](https://i.imgur.com/ihgfHYO.png)
 More pretty pictures....
 ![Screenshot](https://i.imgur.com/lah8sKX.png)
+Here's a nice illustration of how sensitive the patterns are to the maximum number of iterations. 
+Compare this screenshot at 200 iterations max to the one below at 250 iterations max.
+![Screenshot](https://i.imgur.com/Zjo5xDg.png)
+![Screenshot](https://i.imgur.com/gTjPZN8.png)
+
 
 Reimplementing in GLSL will speed things up a bit but will take a lot of work. I'm hoping implementing basic threading will be enough of a speedup before I tackle using shaders.
