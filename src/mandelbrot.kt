@@ -6,15 +6,17 @@ import org.lwjgl.opengl.GL11.*
 import org.lwjgl.system.MemoryUtil
 import java.lang.Math.pow
 import kotlin.math.*
+import org.lwjgl.BufferUtils
+
 
 //Zoom/pan increment stuffs
 const val ZOOM_INCREMENT = 0.3 //increase by X%
 const val PAN_PCT_INCREMENT = 0.25 //Move view by X%
 
 //GL STUFFS
+//Locking aspect ratio to 3:2
 const val WINDOW_SIZE_WIDTH = 1680
-const val WINDOW_SIZE_HEIGHT = 1050
-
+const val WINDOW_SIZE_HEIGHT = (WINDOW_SIZE_WIDTH*(2.0/3.0)).toInt()
 var window: Long = NULL
 
 //This defines the resolution limit of our drawing.
@@ -45,8 +47,9 @@ data class ComplexNumber(val real: Double, val imag: Double) {
 class MandelbrotView(private val window: Long) {
     init {
         glfwSetKeyCallback(window, this::glfwKeypressCallback)
+        glfwSetMouseButtonCallback(window, this::glfwMouseClickCallback)
     }
-
+    private var currentColorMode: Int = 0 // color modes can be changed with the keyboard
     private var currentZoomLevel: Double = 1.0 //zoomed out at 100%
     private var currentZoomLevelInt: Int = 1 //Just for looks
     private var startHeight: Double = 2.0
@@ -55,6 +58,26 @@ class MandelbrotView(private val window: Long) {
     private var BOUND_LEFT: Double = -2.0
     private var BOUND_RIGHT: Double = 1.0
     private var currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
+
+    @Suppress("UNUSED_PARAMETER")
+    private fun glfwMouseClickCallback(window: Long, button: Int, action: Int, mods: Int) {
+        if (action == GLFW_PRESS)
+            if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+                //Get coords of mouse press event and convert them from window coords to ortho coords
+                //Bleh, I hate using buffers.
+                val xbuff = BufferUtils.createDoubleBuffer(1)
+                val ybuff = BufferUtils.createDoubleBuffer(1)
+                glfwGetCursorPos(window, xbuff, ybuff)
+                //So, just for funzies, GLFW's returned click coords use the top-left corner as the origin
+                //instead of the OpenGL standard of the bottom left. Easily dealth with however
+                val reversedYCoord: Int = WINDOW_SIZE_HEIGHT - ybuff.get(0).toInt()
+                val clickWindowCoords = WindowCoordinate(xbuff.get(0).toInt(), reversedYCoord)
+                val clickOrthoCoords: ComplexNumber = getOrthoCoordsFromWindowCoords(clickWindowCoords)
+                currentOrthoCoordinates = clickOrthoCoords
+                println("Setting coordinates to: (${clickOrthoCoords.real}. ${clickOrthoCoords.imag})")
+                updateView()
+            }
+    }
 
     @Suppress("UNUSED_PARAMETER")
     private fun glfwKeypressCallback(window: Long, key: Int, scancode: Int, action: Int, mods: Int) {
@@ -106,13 +129,29 @@ class MandelbrotView(private val window: Long) {
                     ESCAPE_VELOCITY_TEST_ITERATIONS += 50
                     updateView()
                 }
-
+                //Color mode keys, A and S for now
+                //Basic color modes 0, 1, and 2
+                GLFW_KEY_A -> {
+                    if (currentColorMode > 1) currentColorMode = 0
+                    else currentColorMode++
+                    updateView()
+                }
+                //Trig color modes 3 - 8
+                GLFW_KEY_S -> {
+                    when {
+                        currentColorMode < 3 -> currentColorMode = 3
+                        currentColorMode > 7 -> currentColorMode = 3
+                        else -> currentColorMode++
+                    }
+                    updateView()
+                }
                 GLFW_KEY_KP_0 -> resetAll()
             }
         }
     }
 
     private fun resetAll() {
+        currentColorMode = 0
         BOUND_TOP = 1.0
         BOUND_LEFT = -2.0
         currentZoomLevel = 1.0
@@ -130,6 +169,8 @@ class MandelbrotView(private val window: Long) {
         redrawView()
     }
 
+    private fun getOrthoHeight(): Double { return currentZoomLevel * startHeight }
+    private fun getOrthoWidth(): Double { return getOrthoHeight()*3.0/2.0}
     private fun getOrthoCoordsFromWindowCoords(coords: WindowCoordinate): ComplexNumber {
         // The max and min bounds are taken from our BOUND_* variables we used to pass to glOrtho()
         // So to go from window cords to our ortho coords is:
@@ -142,10 +183,30 @@ class MandelbrotView(private val window: Long) {
         //
         // Same for Y coord just different bounds
 
-        val orthoX: Double = ((coords.x.toDouble()/WINDOW_SIZE_WIDTH.toDouble())*(BOUND_RIGHT - BOUND_LEFT)) + BOUND_LEFT
-        val orthoY: Double = ((coords.y.toDouble()/WINDOW_SIZE_HEIGHT.toDouble())*(BOUND_TOP - BOUND_BOTTOM)) + BOUND_BOTTOM
+        val orthoX: Double = ((coords.x.toDouble()/WINDOW_SIZE_WIDTH)*getOrthoWidth()) + BOUND_LEFT
+        val orthoY: Double = ((coords.y.toDouble()/WINDOW_SIZE_HEIGHT)*getOrthoHeight()) + BOUND_BOTTOM
 
         return ComplexNumber(orthoX, orthoY)
+    }
+
+    private fun getColorFromEscapeVelocity(escapeVelocity: Int): Color {
+        //If our velocity is 0 that means we are inside the mandelbrot set, just return black
+        if (escapeVelocity == 0) return Color(0.0,0.0,0.0)
+        val normalizedEscapeVelocity: Double = escapeVelocity.toDouble()/ESCAPE_VELOCITY_TEST_ITERATIONS.toDouble()
+        return when (currentColorMode) {
+            //Modes 0, 1, 2 = basic color modes for red green and blue channels, respectively.
+            0 -> Color(normalizedEscapeVelocity,0.0,0.0)
+            1 -> Color(0.0,normalizedEscapeVelocity,0.0)
+            2 -> Color(0.0,0.0,normalizedEscapeVelocity)
+            // Modes 3 - 7 = trig-based modes
+            3 -> Color(sin(normalizedEscapeVelocity),0.0,0.0)
+            4 -> Color(cos(normalizedEscapeVelocity),0.0,0.0)
+            5 -> Color(tan(normalizedEscapeVelocity),0.0,0.0)
+            6 -> Color(sin(normalizedEscapeVelocity),0.0,cos(normalizedEscapeVelocity))
+            7 -> Color(tan(normalizedEscapeVelocity),0.0,normalizedEscapeVelocity)
+            8 -> Color(normalizedEscapeVelocity,0.0, tan(normalizedEscapeVelocity))
+            else -> Color(1.0,1.0,1.0) //Something went wrong, color it white to differentiate from all other color modes.
+        }
     }
 
     private fun mandelbrotsimple() {
@@ -168,20 +229,17 @@ class MandelbrotView(private val window: Long) {
                 //So now that I'm iterating over window coordinates instead of the imaginary plane coords I have to figure out the pixel
                 //sizing on my own. Best I've come up with so far but I'm sure there is better.
                 //First calculate this pixels color, then set the pixel color around us to the same depending on the point size
-
                 val curWindowCoords = WindowCoordinate(curXcoordinate, curYcoordinate)
-                val escapeVelocityColor: Color = findEscapeVelocity(getOrthoCoordsFromWindowCoords(curWindowCoords))
-
-                glColor3d(escapeVelocityColor.r, escapeVelocityColor.g, escapeVelocityColor.b)
+                val escapeVelocity: Int = findEscapeVelocity(getOrthoCoordsFromWindowCoords(curWindowCoords))
+                val finalPixelColor: Color = getColorFromEscapeVelocity(escapeVelocity)
+                glColor3d(finalPixelColor.r, finalPixelColor.g, finalPixelColor.b)
                 glVertex2i(curWindowCoords.x, curWindowCoords.y)
                 // Now set the color for surrounding pixels if necessary
-
                 if (POINT_SIZE > 1) {
                     for (dy in 0 until POINT_SIZE)
                         for (dx in 0 until POINT_SIZE)
                             glVertex2i(curWindowCoords.x+dx, curWindowCoords.y+dy)
                 }
-
                 curXcoordinate += POINT_SIZE
             }
             curYcoordinate += POINT_SIZE
@@ -189,12 +247,12 @@ class MandelbrotView(private val window: Long) {
         glEnd()
         glfwSwapBuffers(window)
         println("Done! Took ${(System.currentTimeMillis() - starttime)} milliseconds to generate $calcnumber pixels")
-        glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt :: Point size: $POINT_SIZE ::  Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS")
+        glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt :: Point size: $POINT_SIZE ::  Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS  ::  Color Mode: $currentColorMode")
     }
 
     fun redrawView() {
-        println("Generating simple Mandelbrot set at Coords: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag})  Zoomlevel: $currentZoomLevelInt  Point size: $POINT_SIZE  Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS  (this could take a while)...")
-        glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt} :: Point size: $POINT_SIZE :: Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS  ::  Generating...")
+        println("Generating simple Mandelbrot set at Coords: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag})  Zoomlevel: $currentZoomLevelInt  Point size: $POINT_SIZE  Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS  ::  Color Mode: $currentColorMode  (this could take a while)...")
+        glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt} :: Point size: $POINT_SIZE :: Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS  ::  Color Mode: $currentColorMode  ::  Generating...")
         mandelbrotsimple()
     }
 }
@@ -202,15 +260,15 @@ class MandelbrotView(private val window: Long) {
 //Check if a complex number is bounded or escapes.
 //If it escapes (is greater than 2) it returns a color defined by its escaped velocity (ratio between current iteration number and max iterations).
 //If its bounded it returns black, which means that point was in the mandelbrot set.
-fun findEscapeVelocity(c: ComplexNumber): Color {
+fun findEscapeVelocity(c: ComplexNumber): Int {
     var z = ComplexNumber(0.0, 0.0)
     for (iter in 1..ESCAPE_VELOCITY_TEST_ITERATIONS) {
         if (z.magnitude() > 2.0) {
-            return Color(iter.toDouble()/ESCAPE_VELOCITY_TEST_ITERATIONS.toDouble(),0.0, tan(iter.toDouble()/ESCAPE_VELOCITY_TEST_ITERATIONS.toDouble()))
+            return iter
         }
         z = z*z + c
     }
-    return Color(0.0,0.0,0.0) //Black color, inside the set
+    return 0
 }
 
 fun main(args: Array<String>) {
@@ -242,7 +300,6 @@ fun init(windowSizeW: Int = WINDOW_SIZE_WIDTH, windowSizeH: Int = WINDOW_SIZE_HE
     GL11.glClearColor(1.0f, 1.0f, 1.0f, 1.0f) //white background
     GL11.glViewport(0, 0, WINDOW_SIZE_WIDTH, WINDOW_SIZE_HEIGHT)
     GL11.glMatrixMode(GL_PROJECTION)
-    //GL11.glOrtho(-2.0, 1.0, -1.0, 1.0, -1.0, 1.0)
     GL11.glOrtho(0.0, WINDOW_SIZE_WIDTH.toDouble(), 0.0, WINDOW_SIZE_HEIGHT.toDouble(), -1.0, 1.0)
     glfwShowWindow(window)
 }
