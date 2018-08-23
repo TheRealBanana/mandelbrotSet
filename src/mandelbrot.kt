@@ -189,6 +189,7 @@ class MandelbrotView(private val window: Long) {
         BOUND_TOP = 1.0
         BOUND_LEFT = -2.0
         currentZoomLevel = 1.0
+        currentZoomLevelInt = 1
         currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
         updateView()
     }
