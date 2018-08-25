@@ -21,4 +21,6 @@ Here's a nice illustration of how sensitive the patterns are to the maximum numb
 Compare this screenshot at 200 iterations max to the one below at 250 iterations max.
 ![Screenshot](https://i.imgur.com/Zjo5xDg.png)
 ![Screenshot](https://i.imgur.com/gTjPZN8.png)
-
+Implemented a basic color ramp in HSV space varying only the hue using the normalized velocity. Works rather well:
+![Screenshot](https://i.imgur.com/Wa1MHxC.png)
+I had no clue how to convert HSV to RGB values but found some awesome code on lolengine.net that works perfectly.

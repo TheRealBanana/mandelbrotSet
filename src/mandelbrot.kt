@@ -20,7 +20,7 @@ const val WINDOW_SIZE_HEIGHT = (WINDOW_SIZE_WIDTH*(2.0/3.0)).toInt()
 var window: Long = NULL
 
 //How many iterations should we run before we are certain of an escape velocity?
-var ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 500
+val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 500
 
 data class WindowCoordinate(val x: Int, val y: Int)
 data class ComplexNumber(val real: Double, val imag: Double)
@@ -35,6 +35,7 @@ class MandelbrotView(private val window: Long) {
     private var currentColorMode: Int = 0 // color modes can be changed with the keyboard
     private var currentZoomLevel: Double = 1.0 //zoomed out at 100%
     private var currentZoomLevelInt: Int = 1 //Just for looks
+    private var maxTestIterations: Int = ESCAPE_VELOCITY_TEST_ITERATIONS
     private var startHeight: Double = 2.0
     private var BOUND_TOP: Double = 1.0
     private var BOUND_BOTTOM: Double = -1.0
@@ -46,6 +47,7 @@ class MandelbrotView(private val window: Long) {
     //private var currentOrthoCoordinates = ComplexNumber(-1.632329465459738, 0.022135094625989362)
     //Coords from the deep zoom on wikipedia
     //private var currentOrthoCoordinates = ComplexNumber(-0.743643887037158704752191506114774, 0.131825904205311970493132056385139)
+
     // Shader stuffs
     private var uloc_WINDOW_SIZE_WIDTH: Int = 0
     private var uloc_WINDOW_SIZE_HEIGHT: Int = 0
@@ -83,7 +85,7 @@ class MandelbrotView(private val window: Long) {
         GL20.glUniform1i(uloc_WINDOW_SIZE_WIDTH, WINDOW_SIZE_WIDTH)
         GL20.glUniform1i(uloc_WINDOW_SIZE_HEIGHT, WINDOW_SIZE_HEIGHT)
         GL20.glUniform1i(uloc_CURRENT_COLOR_MODE, currentColorMode)
-        GL20.glUniform1i(uloc_ESCAPE_VELOCITY_TEST_ITERATIONS, ESCAPE_VELOCITY_TEST_ITERATIONS)
+        GL20.glUniform1i(uloc_ESCAPE_VELOCITY_TEST_ITERATIONS, maxTestIterations)
         GL40.glUniform1d(uloc_ORTHO_WIDTH, getOrthoWidth())
         GL40.glUniform1d(uloc_ORTHO_HEIGHT, getOrthoHeight())
         GL40.glUniform1d(uloc_BOUND_LEFT, BOUND_LEFT)
@@ -155,12 +157,12 @@ class MandelbrotView(private val window: Long) {
                 }
                 */
                 GLFW.GLFW_KEY_MINUS -> {
-                    ESCAPE_VELOCITY_TEST_ITERATIONS -= ITERATION_INCREMENT
-                    if (ESCAPE_VELOCITY_TEST_ITERATIONS < 0) ESCAPE_VELOCITY_TEST_ITERATIONS = 0
+                    maxTestIterations -= ITERATION_INCREMENT
+                    if (maxTestIterations < 0) maxTestIterations = 0
                     updateView()
                 }
                 GLFW.GLFW_KEY_EQUAL -> {
-                    ESCAPE_VELOCITY_TEST_ITERATIONS += ITERATION_INCREMENT
+                    maxTestIterations += ITERATION_INCREMENT
                     updateView()
                 }
                 //Color mode keys, A and S for now
@@ -186,6 +188,7 @@ class MandelbrotView(private val window: Long) {
 
     private fun resetAll() {
         currentColorMode = 0
+        maxTestIterations = ESCAPE_VELOCITY_TEST_ITERATIONS
         BOUND_TOP = 1.0
         BOUND_LEFT = -2.0
         currentZoomLevel = 1.0
@@ -228,8 +231,8 @@ class MandelbrotView(private val window: Long) {
 
     fun redrawView() {
         val starttime = System.currentTimeMillis()
-        println("Generating simple Mandelbrot set at Coords: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag})  Zoomlevel: $currentZoomLevelInt  Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS  ::  Color Mode: $currentColorMode  (this could take a while)...")
-        GLFW.glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt} :: Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS  ::  Color Mode: $currentColorMode  ::  Generating...")
+        println("Generating simple Mandelbrot set at Coords: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag})  Zoomlevel: $currentZoomLevelInt  Max iterations: $maxTestIterations  ::  Color Mode: $currentColorMode  (this could take a while)...")
+        GLFW.glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt :: Max iterations: $maxTestIterations  ::  Color Mode: $currentColorMode  ::  Generating...")
         updateShaderUniforms()
         GL11.glBegin(GL11.GL_QUADS)
         GL11.glVertex2f(-1.0f, 1.0f)
@@ -238,10 +241,11 @@ class MandelbrotView(private val window: Long) {
         GL11.glVertex2f(-1.0f, -1.0f)
         GL11.glEnd()
         GLFW.glfwSwapBuffers(window)
+        //GL11.glFlush()
         //Need this call otherwise our timer returns 0
         glFinish()
         println("Done! Took ${(System.currentTimeMillis() - starttime)} milliseconds.")
-        GLFW.glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt ::  Max iterations: $ESCAPE_VELOCITY_TEST_ITERATIONS  ::  Color Mode: $currentColorMode")
+        GLFW.glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt ::  Max iterations: $maxTestIterations  ::  Color Mode: $currentColorMode")
     }
 }
 
@@ -252,6 +256,6 @@ fun main(args: Array<String>) {
     //and wait for any keyboard stuffs now
     while (!GLFW.glfwWindowShouldClose(window)) {
         GLFW.glfwPollEvents()
-        Thread.sleep(50) //only paint every 100ms
+        Thread.sleep(100)
     }
 }
