@@ -30,7 +30,7 @@ fun glinit(windowSizeW: Int, windowSizeH: Int, windowTitle: String = "Untitled W
     GLFW.glfwDefaultWindowHints()
     //Do not allow resize
     GLFW.glfwWindowHint(GLFW.GLFW_RESIZABLE, GLFW.GLFW_FALSE)
-    GLFW.glfwWindowHint(GLFW.GLFW_DOUBLEBUFFER, GLFW.GLFW_TRUE)
+    GLFW.glfwWindowHint(GLFW.GLFW_DOUBLEBUFFER, GLFW.GLFW_FALSE)
     val window = GLFW.glfwCreateWindow(windowSizeW, windowSizeH, windowTitle, 0, 0)
     if (window == MemoryUtil.NULL) {
         throw Exception("Failed to initialize window.")

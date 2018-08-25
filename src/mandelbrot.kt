@@ -20,7 +20,7 @@ const val WINDOW_SIZE_HEIGHT = (WINDOW_SIZE_WIDTH*(2.0/3.0)).toInt()
 var window: Long = NULL
 
 //How many iterations should we run before we are certain of an escape velocity?
-val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 500
+const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 500
 
 data class WindowCoordinate(val x: Int, val y: Int)
 data class ComplexNumber(val real: Double, val imag: Double)
@@ -29,12 +29,14 @@ class MandelbrotView(private val window: Long) {
     init {
         GLFW.glfwSetKeyCallback(window, this::glfwKeypressCallback)
         GLFW.glfwSetMouseButtonCallback(window, this::glfwMouseClickCallback)
-        setupShader()
+        setupShaders()
 
     }
     private var currentColorMode: Int = 0 // color modes can be changed with the keyboard
     private var currentZoomLevel: Double = 1.0 //zoomed out at 100%
     private var currentZoomLevelInt: Int = 1 //Just for looks
+    //Unzooming proved to be problematic so until I get some better maths this works
+    private val zoomStack: MutableList<Double> = mutableListOf()
     private var maxTestIterations: Int = ESCAPE_VELOCITY_TEST_ITERATIONS
     private var startHeight: Double = 2.0
     private var BOUND_TOP: Double = 1.0
@@ -42,11 +44,7 @@ class MandelbrotView(private val window: Long) {
     private var BOUND_LEFT: Double = -2.0
     private var BOUND_RIGHT: Double = 1.0
     private var currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
-    //private var currentOrthoCoordinates = ComplexNumber(0.3866831889092910, 0.5696433852559384)
-    //Weird square thing @ 200 iterations and zoom ~75
-    //private var currentOrthoCoordinates = ComplexNumber(-1.632329465459738, 0.022135094625989362)
-    //Coords from the deep zoom on wikipedia
-    //private var currentOrthoCoordinates = ComplexNumber(-0.743643887037158704752191506114774, 0.131825904205311970493132056385139)
+
 
     // Shader stuffs
     private var uloc_WINDOW_SIZE_WIDTH: Int = 0
@@ -57,28 +55,42 @@ class MandelbrotView(private val window: Long) {
     private var uloc_ORTHO_HEIGHT: Int = 0
     private var uloc_BOUND_LEFT: Int = 0
     private var uloc_BOUND_BOTTOM: Int = 0
+    private var FPMODE: Int = 0 //0 = fp32, 1 = fp64, 2 = fp128 (emulated, todo)
+    private var shaderProgramFP64: Int = 0
+    private var shaderProgramFP32: Int = 0
 
-    private fun setupShader() {
-        //Lets create our shader program and attach our shaders
+    private fun setupShaders() {
+        //Lets create our shader programs and attach our shaders
+        //Fragment Shaders, both 32-bit and 64-bit floating point
+        val fragmentShaderFP64 = createShaderFromFile("src/mandelbrot_fp64.frag", GL20.GL_FRAGMENT_SHADER)
+        val fragmentShaderFP32 = createShaderFromFile("src/mandelbrot_fp32.frag", GL20.GL_FRAGMENT_SHADER)
+
         //Shader program that contains all our shaders
-        val shaderProgram = GL20.glCreateProgram()
-        //Fragment Shader
-        val fragmentShader = createShaderFromFile("src/mandelbrot_fp64.frag", GL20.GL_FRAGMENT_SHADER)
+        shaderProgramFP64 = GL20.glCreateProgram()
+        shaderProgramFP32 = GL20.glCreateProgram()
+
         //Finally attach our compiled shaders to our shader program and use it
-        GL20.glAttachShader(shaderProgram, fragmentShader)
+        GL20.glAttachShader(shaderProgramFP64, fragmentShaderFP64)
+        GL20.glAttachShader(shaderProgramFP32, fragmentShaderFP32)
         //Linky linky
-        GL20.glLinkProgram(shaderProgram)
+        GL20.glLinkProgram(shaderProgramFP64)
+        GL20.glLinkProgram(shaderProgramFP32)
         //Usey Usey
-        GL20.glUseProgram(shaderProgram)
+        when (FPMODE) {
+            0 -> GL20.glUseProgram(shaderProgramFP64)
+            1 -> GL20.glUseProgram(shaderProgramFP32)
+        }
         //Uniform locations only change on shader programing linking so this doesnt have to be run every loop iteration
-        uloc_WINDOW_SIZE_WIDTH = GL20.glGetUniformLocation(shaderProgram, "WINDOW_SIZE_WIDTH")
-        uloc_WINDOW_SIZE_HEIGHT = GL20.glGetUniformLocation(shaderProgram, "WINDOW_SIZE_HEIGHT")
-        uloc_CURRENT_COLOR_MODE = GL20.glGetUniformLocation(shaderProgram, "CURRENT_COLOR_MODE")
-        uloc_ESCAPE_VELOCITY_TEST_ITERATIONS = GL20.glGetUniformLocation(shaderProgram, "ESCAPE_VELOCITY_TEST_ITERATIONS")
-        uloc_ORTHO_WIDTH = GL20.glGetUniformLocation(shaderProgram, "ORTHO_WIDTH")
-        uloc_ORTHO_HEIGHT = GL20.glGetUniformLocation(shaderProgram, "ORTHO_HEIGHT")
-        uloc_BOUND_LEFT = GL20.glGetUniformLocation(shaderProgram, "BOUND_LEFT")
-        uloc_BOUND_BOTTOM = GL20.glGetUniformLocation(shaderProgram, "BOUND_BOTTOM")
+        //We dont need to get new location references for our other shaders because we manually set the uniform locations 
+        //to all be the same across the different shaders.
+        uloc_WINDOW_SIZE_WIDTH = GL20.glGetUniformLocation(shaderProgramFP64, "WINDOW_SIZE_WIDTH")
+        uloc_WINDOW_SIZE_HEIGHT = GL20.glGetUniformLocation(shaderProgramFP64, "WINDOW_SIZE_HEIGHT")
+        uloc_CURRENT_COLOR_MODE = GL20.glGetUniformLocation(shaderProgramFP64, "CURRENT_COLOR_MODE")
+        uloc_ESCAPE_VELOCITY_TEST_ITERATIONS = GL20.glGetUniformLocation(shaderProgramFP64, "ESCAPE_VELOCITY_TEST_ITERATIONS")
+        uloc_ORTHO_WIDTH = GL20.glGetUniformLocation(shaderProgramFP64, "ORTHO_WIDTH")
+        uloc_ORTHO_HEIGHT = GL20.glGetUniformLocation(shaderProgramFP64, "ORTHO_HEIGHT")
+        uloc_BOUND_LEFT = GL20.glGetUniformLocation(shaderProgramFP64, "BOUND_LEFT")
+        uloc_BOUND_BOTTOM = GL20.glGetUniformLocation(shaderProgramFP64, "BOUND_BOTTOM")
     }
 
     private fun updateShaderUniforms() {
@@ -86,10 +98,20 @@ class MandelbrotView(private val window: Long) {
         GL20.glUniform1i(uloc_WINDOW_SIZE_HEIGHT, WINDOW_SIZE_HEIGHT)
         GL20.glUniform1i(uloc_CURRENT_COLOR_MODE, currentColorMode)
         GL20.glUniform1i(uloc_ESCAPE_VELOCITY_TEST_ITERATIONS, maxTestIterations)
-        GL40.glUniform1d(uloc_ORTHO_WIDTH, getOrthoWidth())
-        GL40.glUniform1d(uloc_ORTHO_HEIGHT, getOrthoHeight())
-        GL40.glUniform1d(uloc_BOUND_LEFT, BOUND_LEFT)
-        GL40.glUniform1d(uloc_BOUND_BOTTOM, BOUND_BOTTOM)
+        when (FPMODE) {
+            0 -> {
+                GL40.glUniform1d(uloc_ORTHO_WIDTH, getOrthoWidth())
+                GL40.glUniform1d(uloc_ORTHO_HEIGHT, getOrthoHeight())
+                GL40.glUniform1d(uloc_BOUND_LEFT, BOUND_LEFT)
+                GL40.glUniform1d(uloc_BOUND_BOTTOM, BOUND_BOTTOM)
+            }
+            1 -> {
+                GL20.glUniform1f(uloc_ORTHO_WIDTH, getOrthoWidth().toFloat())
+                GL20.glUniform1f(uloc_ORTHO_HEIGHT, getOrthoHeight().toFloat())
+                GL20.glUniform1f(uloc_BOUND_LEFT, BOUND_LEFT.toFloat())
+                GL20.glUniform1f(uloc_BOUND_BOTTOM, BOUND_BOTTOM.toFloat())
+            }
+        }
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -135,11 +157,14 @@ class MandelbrotView(private val window: Long) {
                     updateView()
                 }
                 GLFW.GLFW_KEY_KP_ADD -> {
-                    currentZoomLevel += currentZoomLevel * ZOOM_INCREMENT
-                    currentZoomLevelInt--
-                    updateView()
+                    if (zoomStack.isNotEmpty()) {
+                        currentZoomLevel = zoomStack.removeAt(zoomStack.lastIndex)
+                        currentZoomLevelInt--
+                        updateView()
+                    }
                 }
                 GLFW.GLFW_KEY_KP_SUBTRACT -> {
+                    zoomStack.add(currentZoomLevel)
                     currentZoomLevel -= currentZoomLevel * ZOOM_INCREMENT
                     currentZoomLevelInt++
                     updateView()
@@ -181,6 +206,31 @@ class MandelbrotView(private val window: Long) {
                     }
                     updateView()
                 }
+                //Change floating-point precision mode. only mode 0 and 1 for now
+                GLFW.GLFW_KEY_KP_1 -> {
+                    FPMODE = 0
+                    GL20.glUseProgram(shaderProgramFP64)
+                    updateView()
+                }
+                GLFW.GLFW_KEY_KP_2 -> {
+                    FPMODE = 1
+                    GL20.glUseProgram(shaderProgramFP32)
+                    updateView()
+                }
+                GLFW.GLFW_KEY_1 -> {
+                    currentOrthoCoordinates = ComplexNumber(0.3866831889092910, 0.5696433852559384)
+                    updateView()
+                }
+                GLFW.GLFW_KEY_2 -> {
+                    //Weird square thing @ 200 iterations and zoom ~75
+                    currentOrthoCoordinates = ComplexNumber(-1.632329465459738, 0.022135094625989362)
+                    updateView()
+                }
+                GLFW.GLFW_KEY_3 -> {
+                    //Coords from the deep zoom on wikipedia
+                    currentOrthoCoordinates = ComplexNumber(-0.743643887037158704752191506114774, 0.131825904205311970493132056385139)
+                    updateView()
+                }
                 GLFW.GLFW_KEY_KP_0 -> resetAll()
             }
         }
@@ -198,7 +248,7 @@ class MandelbrotView(private val window: Long) {
     }
 
     private fun updateView() {
-        val height: Double = currentZoomLevel * startHeight
+        val height: Double = getOrthoHeight()
         val width: Double = height*3.0/2.0
         BOUND_LEFT = currentOrthoCoordinates.real-width/2
         BOUND_TOP = currentOrthoCoordinates.imag+height/2
@@ -227,12 +277,19 @@ class MandelbrotView(private val window: Long) {
         return ComplexNumber(orthoX, orthoY)
     }
 
-
+    private fun updateTitle(s: String = "") {
+        val fpmode: String = when (FPMODE) {
+            1 -> "FP32"
+            else -> "FP64"
+        }
+        val curOrthoCoords = "${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}"
+        GLFW.glfwSetWindowTitle(window, "Mandelbrot Set ($fpmode) :: ($curOrthoCoords) :: Zoom Level: $currentZoomLevelInt :: Max iterations: $maxTestIterations :: Color Mode: $currentColorMode $s")
+    }
 
     fun redrawView() {
         val starttime = System.currentTimeMillis()
         println("Generating simple Mandelbrot set at Coords: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag})  Zoomlevel: $currentZoomLevelInt  Max iterations: $maxTestIterations  ::  Color Mode: $currentColorMode  (this could take a while)...")
-        GLFW.glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt :: Max iterations: $maxTestIterations  ::  Color Mode: $currentColorMode  ::  Generating...")
+        updateTitle(":: Generating...")
         updateShaderUniforms()
         GL11.glBegin(GL11.GL_QUADS)
         GL11.glVertex2f(-1.0f, 1.0f)
@@ -240,12 +297,14 @@ class MandelbrotView(private val window: Long) {
         GL11.glVertex2f(1.0f, -1.0f)
         GL11.glVertex2f(-1.0f, -1.0f)
         GL11.glEnd()
-        GLFW.glfwSwapBuffers(window)
-        //GL11.glFlush()
+        //Using glFlush() instead of swapBuffers because there is a significant performance penalty when using swapBuffers
+        //with a slow fragment shader. As I understand it, swapBuffers waits until the preceding frame has drawn before swapping
+        //Switching to glFlush() eliminates this overhead entirely. This performance issue only occurred when many changes piled up.
+        GL11.glFlush()
         //Need this call otherwise our timer returns 0
         glFinish()
         println("Done! Took ${(System.currentTimeMillis() - starttime)} milliseconds.")
-        GLFW.glfwSetWindowTitle(window, "Mandelbrot Set :: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}) :: Zoom Level: $currentZoomLevelInt ::  Max iterations: $maxTestIterations  ::  Color Mode: $currentColorMode")
+        updateTitle()
     }
 }
 
