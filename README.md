@@ -24,3 +24,4 @@ Compare this screenshot at 200 iterations max to the one below at 250 iterations
 Implemented a basic color ramp in HSV space varying only the hue using the normalized velocity. Works rather well:
 ![Screenshot](https://i.imgur.com/Wa1MHxC.png)
 I had no clue how to convert HSV to RGB values but found some awesome code on lolengine.net that works perfectly.
+![Screenshot](https://image.ibb.co/nnOvtU/mandelbrot_colorscheme_hsvramp2.png)
