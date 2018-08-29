@@ -20,7 +20,7 @@ const val WINDOW_SIZE_HEIGHT = (WINDOW_SIZE_WIDTH*(2.0/3.0)).toInt()
 var window: Long = NULL
 
 //How many iterations should we run before we are certain of an escape velocity?
-const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 500
+const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 1000
 
 data class WindowCoordinate(val x: Int, val y: Int)
 data class ComplexNumber(val real: Double, val imag: Double)
@@ -191,19 +191,14 @@ class MandelbrotView(private val window: Long) {
                     updateView()
                 }
                 //Color mode keys, A and S for now
-                //Basic color modes 0, 1, and 2
-                GLFW.GLFW_KEY_A -> {
-                    if (currentColorMode > 1) currentColorMode = 0
-                    else currentColorMode++
-                    updateView()
-                }
-                //Trig color modes 3 - 8
                 GLFW.GLFW_KEY_S -> {
-                    when {
-                        currentColorMode < 3 -> currentColorMode = 3
-                        currentColorMode > 7 -> currentColorMode = 3
-                        else -> currentColorMode++
-                    }
+                    currentColorMode++
+                    if (currentColorMode > 7) currentColorMode = 0
+                    updateView ()
+                }
+                GLFW.GLFW_KEY_A -> {
+                    currentColorMode--
+                    if (currentColorMode < 0) currentColorMode = 7
                     updateView()
                 }
                 //Change floating-point precision mode. only mode 0 and 1 for now
@@ -229,6 +224,11 @@ class MandelbrotView(private val window: Long) {
                 GLFW.GLFW_KEY_3 -> {
                     //Coords from the deep zoom on wikipedia
                     currentOrthoCoordinates = ComplexNumber(-0.743643887037158704752191506114774, 0.131825904205311970493132056385139)
+                    updateView()
+                }
+                GLFW.GLFW_KEY_4 -> {
+                    //Cover of August 1985 issue of Scientific American
+                    currentOrthoCoordinates = ComplexNumber(-0.909,0.275)
                     updateView()
                 }
                 GLFW.GLFW_KEY_KP_0 -> resetAll()
