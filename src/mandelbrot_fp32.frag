@@ -25,7 +25,6 @@ vec3 hsv2rgb(vec3 c)
 float map(float value, float min1, float max1, float min2, float max2) {
   return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
 }
-
 vec2 complexAdd(vec2 c1, vec2 c2) {
     return vec2(c1.x+c2.x, c1.y+c2.y);
 }
@@ -34,31 +33,27 @@ vec2 complexMulti(vec2 c1, vec2 c2) {
     float real = (c1.x * c2.x) + (c1.y * c2.y * -1.0);
     return vec2(real,imag);
 }
-//Holy crap I had no idea how expensive Sqrt() calls were.
-// I'd seen the expression `(c.real*c.real) + (c.imag*c.imag) < 4.0` before in some code examples online but
-// never used it because I wasn't why they were doing it. Sqrt calls are expensive, very expensive, even in
-// the obvious case of sqrt(4)=2. By squaring both sides of the equation `sqrt((c.real*c.real)+(c.imag*c.imag))=2`
-// we get rid of the expensive square root operation. The branching if statements in the old complexMagnitude()
-// function also contributed the negative performance.
-//
-// Some idea of the gains. The worst case scenario, performance wise, is where z=z^2+c has to be calculated to the
-// full iteration count and never diverges past 2 (or 4 with the new maths). We can get this by zooming into the
-// very center (0.0, 0.0) until there is only black visible. This is where every point on the screen is checked fully.
-// On my PC the time to render at 500 iterations at zoom level 10 @ corrds (-0.5, 0.0) was
-// old math: 276ms
-// new math: 72ms
-// That's a pretty cool improvement but I still wonder what else can be done. I'm sure theres a nice way to make the
-// complexMulti() function faster so I will look into that next. I know there is faster code out there but I don't want
-// to implement anything I don't completely and totally understand first.
+
 float findEscapeVelocity(vec2 c) {
     vec2 z = vec2(0.0, 0.0);
     int iter = 1;
-    while ((z.x*z.x) + (z.y*z.y) < 4.0 && iter < ESCAPE_VELOCITY_TEST_ITERATIONS) {
-        z = complexMulti(z, z);
-        z = complexAdd(z, c);
+    float zRealSquared = z.x*z.x;
+    float zImagSquared = z.y*z.y;
+    while (zRealSquared + zImagSquared < 4.0 && iter < ESCAPE_VELOCITY_TEST_ITERATIONS) {
+        //Moved out of functions to increase speed... but it didnt.
+        //I think this means the GLSL compiler was pretty smart and made these optimizations for us.
+        // Much thanks to https://randomascii.wordpress.com/2011/08/13/faster-fractals-through-algebra
+        //
+        //Z^2+c
+        z.y = (z.x * z.y);
+        z.y += z.y;
+        z.y += c.y;
+        z.x = (zRealSquared) - zImagSquared + c.x;
         iter++;
+        zRealSquared = z.x*z.x;
+        zImagSquared = z.y*z.y;
     }
-    if ((z.x*z.x) + (z.y*z.y) >= 4.0) {
+    if (zRealSquared + zImagSquared >= 4.0) {
         return float(iter)/float(ESCAPE_VELOCITY_TEST_ITERATIONS);
     }
     return 0.0;

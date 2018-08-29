@@ -20,7 +20,7 @@ const val WINDOW_SIZE_HEIGHT = (WINDOW_SIZE_WIDTH*(2.0/3.0)).toInt()
 var window: Long = NULL
 
 //How many iterations should we run before we are certain of an escape velocity?
-const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 1000
+const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 500
 
 data class WindowCoordinate(val x: Int, val y: Int)
 data class ComplexNumber(val real: Double, val imag: Double)
@@ -243,6 +243,7 @@ class MandelbrotView(private val window: Long) {
         BOUND_LEFT = -2.0
         currentZoomLevel = 1.0
         currentZoomLevelInt = 1
+        zoomStack.clear()
         currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
         updateView()
     }
