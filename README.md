@@ -9,7 +9,7 @@ At least it prints something though so I'm happy. Recoding using GLSL sped the p
 Unfortunately GLSL's fp64 extension doesn't include trigonometric functions so the only color modes are basic modes for now.
 
 Found an interesting coloring scheme using sine and cosine functions with the escape velocity (both normalized to the max number of iterations and unnormalized) shown below. Will be interesting to see how the color evolves as we get pan/zoom implemented.
-![Screenshot](https://i.imgur.com/VwPGoYX.png)
+![Screenshot](https://i.imgur.com/QVky6WX.gifv)
 ![Screenshot](https://i.imgur.com/AIPmvc6.png)
 ![Screenshot](https://i.imgur.com/w5i0v0U.png)
 I forgot that adjusting the max number of iterations produces better (and slower) results at higher numbers. 
