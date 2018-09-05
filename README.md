@@ -13,7 +13,7 @@ Found an interesting coloring scheme using sine and cosine functions with the es
 Tried to remake the "deep-zoom" animation on wikipedia. Couldnt zoom the whole way without arbitrary precision however.  
 [Animated "Deep Zoom" - 4000 iterations](https://i.imgur.com/QVky6WX.mp4)  
 [Animated "Deep Zoom" - 6000 iterations](https://i.imgur.com/Kk3XzEy.mp4)  
-[Animated "Deep Zoom" - 10000 iterations](https://i.imgur.com/qJxoWdr.mp4)  
+[Animated "Deep Zoom" - 10000 iterations](https://i.imgur.com/r4sd6Wv.mp4)  
 
 I forgot that adjusting the max number of iterations produces better (and slower) results at higher numbers. 
 Here's some results @1000 iteration limit (instead of the above 50-iteration limit):
