@@ -5,11 +5,10 @@ import org.lwjgl.BufferUtils
 import org.lwjgl.opengl.GL11.glFinish
 import org.lwjgl.opengl.GL20
 import org.lwjgl.opengl.GL40
-import org.kylesplace.kotlin.GLhelperfunctions.*
-
+import java.lang.Math.pow
 
 //Zoom/pan increment stuffs
-const val ZOOM_INCREMENT = 0.3 //increase by X%
+var ZOOM_INCREMENT = 0.3 //increase by X%
 const val PAN_PCT_INCREMENT = 0.25 //Move view by X%
 const val ITERATION_INCREMENT = 20
 
@@ -23,7 +22,11 @@ var window: Long = NULL
 const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 500
 
 data class WindowCoordinate(val x: Int, val y: Int)
-data class ComplexNumber(val real: Double, val imag: Double)
+data class ComplexNumber(val real: Double, val imag: Double) {
+    override fun toString(): String {
+        return "($real, $imag)"
+    }
+}
 
 class MandelbrotView(private val window: Long) {
     init {
@@ -33,8 +36,8 @@ class MandelbrotView(private val window: Long) {
 
     }
     private var currentColorMode: Int = 0 // color modes can be changed with the keyboard
-    private var currentZoomLevel: Double = 1.0 //zoomed out at 100%
-    private var currentZoomLevelInt: Int = 1 //Just for looks
+    var currentZoomLevel: Double = 1.0 //zoomed out at 100%
+    var currentZoomLevelInt: Int = 1 //Just for looks
     //Unzooming proved to be problematic so until I get some better maths this works
     private val zoomStack: MutableList<Double> = mutableListOf()
     private var maxTestIterations: Int = ESCAPE_VELOCITY_TEST_ITERATIONS
@@ -43,7 +46,10 @@ class MandelbrotView(private val window: Long) {
     private var BOUND_BOTTOM: Double = -1.0
     private var BOUND_LEFT: Double = -2.0
     private var BOUND_RIGHT: Double = 1.0
-    private var currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
+    var currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
+    private val zoomsaver = SaveZoomSequence(this)
+    private var controlsLocked: Boolean = false
+    private var quietMode: Boolean = false
 
 
     // Shader stuffs
@@ -117,7 +123,7 @@ class MandelbrotView(private val window: Long) {
     @Suppress("UNUSED_PARAMETER")
     private fun glfwMouseClickCallback(window: Long, button: Int, action: Int, mods: Int) {
         if (action == GLFW.GLFW_PRESS)
-            if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && action == GLFW.GLFW_PRESS) {
+            if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && action == GLFW.GLFW_PRESS && !controlsLocked) {
                 //Get coords of mouse press event and convert them from window coords to ortho coords
                 //Bleh, I hate using buffers.
                 val xbuff = BufferUtils.createDoubleBuffer(1)
@@ -129,110 +135,67 @@ class MandelbrotView(private val window: Long) {
                 val clickWindowCoords = WindowCoordinate(xbuff.get(0).toInt(), reversedYCoord)
                 val clickOrthoCoords: ComplexNumber = getOrthoCoordsFromWindowCoords(clickWindowCoords)
                 currentOrthoCoordinates = clickOrthoCoords
-                println("Setting coordinates to: (${clickOrthoCoords.real}. ${clickOrthoCoords.imag})")
+                println("Setting coordinates to: $clickOrthoCoords")
                 updateView()
             }
     }
 
     @Suppress("UNUSED_PARAMETER")
     private fun glfwKeypressCallback(window: Long, key: Int, scancode: Int, action: Int, mods: Int) {
-        if (action == GLFW.GLFW_PRESS || action == GLFW.GLFW_REPEAT) {
+        if ((action == GLFW.GLFW_PRESS || action == GLFW.GLFW_REPEAT) && !controlsLocked) {
             //needed later
             val moveAmount: Double = currentZoomLevel*startHeight/2.0*PAN_PCT_INCREMENT
             when (key) {
-                GLFW.GLFW_KEY_UP -> {
-                    currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real, currentOrthoCoordinates.imag + moveAmount)
-                    updateView()
-                }
-                GLFW.GLFW_KEY_DOWN -> {
-                    currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real, currentOrthoCoordinates.imag - moveAmount)
-                    updateView()
-                }
-                GLFW.GLFW_KEY_LEFT -> {
-                    currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real - moveAmount, currentOrthoCoordinates.imag)
-                    updateView()
-                }
-                GLFW.GLFW_KEY_RIGHT -> {
-                    currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real + moveAmount, currentOrthoCoordinates.imag)
-                    updateView()
-                }
+                GLFW.GLFW_KEY_UP -> currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real, currentOrthoCoordinates.imag + moveAmount)
+                GLFW.GLFW_KEY_DOWN -> currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real, currentOrthoCoordinates.imag - moveAmount)
+                GLFW.GLFW_KEY_LEFT -> currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real - moveAmount, currentOrthoCoordinates.imag)
+                GLFW.GLFW_KEY_RIGHT -> currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real + moveAmount, currentOrthoCoordinates.imag)
                 GLFW.GLFW_KEY_KP_ADD -> {
-                    if (zoomStack.isNotEmpty()) {
-                        currentZoomLevel = zoomStack.removeAt(zoomStack.lastIndex)
-                        currentZoomLevelInt--
-                        updateView()
-                    }
+                    setZoomLevelFromInt(--currentZoomLevelInt)
                 }
                 GLFW.GLFW_KEY_KP_SUBTRACT -> {
-                    zoomStack.add(currentZoomLevel)
-                    currentZoomLevel -= currentZoomLevel * ZOOM_INCREMENT
-                    currentZoomLevelInt++
-                    updateView()
+                    setZoomLevelFromInt(++currentZoomLevelInt)
                 }
-                /*
-                Point size is not used for now, might be removed completely.
-                GLFW.GLFW_KEY_LEFT_BRACKET -> {
-                    POINT_SIZE--
-                    if (POINT_SIZE == 0) POINT_SIZE = 1
-                    updateView()
-                }
-                GLFW.GLFW_KEY_RIGHT_BRACKET -> {
-                    POINT_SIZE++
-                    updateView()
-                }
-                */
                 GLFW.GLFW_KEY_MINUS -> {
                     maxTestIterations -= ITERATION_INCREMENT
                     if (maxTestIterations < 0) maxTestIterations = 0
-                    updateView()
                 }
-                GLFW.GLFW_KEY_EQUAL -> {
+                GLFW.GLFW_KEY_EQUAL ->
                     maxTestIterations += ITERATION_INCREMENT
-                    updateView()
-                }
+
                 //Color mode keys, A and S for now
                 GLFW.GLFW_KEY_S -> {
                     currentColorMode++
                     if (currentColorMode > 7) currentColorMode = 0
-                    updateView ()
                 }
                 GLFW.GLFW_KEY_A -> {
                     currentColorMode--
                     if (currentColorMode < 0) currentColorMode = 7
-                    updateView()
                 }
                 //Change floating-point precision mode. only mode 0 and 1 for now
                 GLFW.GLFW_KEY_KP_1 -> {
                     FPMODE = 0
                     GL20.glUseProgram(shaderProgramFP64)
-                    updateView()
                 }
                 GLFW.GLFW_KEY_KP_2 -> {
                     FPMODE = 1
                     GL20.glUseProgram(shaderProgramFP32)
-                    updateView()
                 }
-                GLFW.GLFW_KEY_1 -> {
-                    currentOrthoCoordinates = ComplexNumber(0.3866831889092910, 0.5696433852559384)
-                    updateView()
-                }
-                GLFW.GLFW_KEY_2 -> {
-                    //Weird square thing @ 200 iterations and zoom ~75
-                    currentOrthoCoordinates = ComplexNumber(-1.632329465459738, 0.022135094625989362)
-                    updateView()
-                }
-                GLFW.GLFW_KEY_3 -> {
-                    //Coords from the deep zoom on wikipedia
-                    currentOrthoCoordinates = ComplexNumber(-0.743643887037158704752191506114774, 0.131825904205311970493132056385139)
-                    updateView()
-                }
-                GLFW.GLFW_KEY_4 -> {
-                    //Cover of August 1985 issue of Scientific American
-                    currentOrthoCoordinates = ComplexNumber(-0.909,0.275)
-                    updateView()
-                }
+                GLFW.GLFW_KEY_1 -> currentOrthoCoordinates = ComplexNumber(0.3866831889092910, 0.5696433852559384)
+                //Weird square thing @ 200 iterations and zoom ~75
+                GLFW.GLFW_KEY_2 -> currentOrthoCoordinates = ComplexNumber(-1.632329465459738, 0.022135094625989362)
+                //Coords from the deep zoom on wikipedia
+                GLFW.GLFW_KEY_3 -> currentOrthoCoordinates = ComplexNumber(-0.743643887037158704752191506114774, 0.131825904205311970493132056385139)
+                //Cover of August 1985 issue of Scientific American
+                GLFW.GLFW_KEY_4 -> currentOrthoCoordinates = ComplexNumber(-0.909,0.275)
+                GLFW.GLFW_KEY_5 -> currentOrthoCoordinates = ComplexNumber(0.001643721971153, -0.822467633298876)
+                GLFW.GLFW_KEY_6 -> currentOrthoCoordinates = ComplexNumber(-1.2032239372416502, 0.16503554579069707)
+                GLFW.GLFW_KEY_7 -> currentOrthoCoordinates = ComplexNumber(-0.7489804117521476, -0.050907824616219184)
                 GLFW.GLFW_KEY_KP_0 -> resetAll()
+                GLFW.GLFW_KEY_Z -> zoomsaver.savePngSequence()
+                else -> return
             }
+            updateView()
         }
     }
 
@@ -248,7 +211,7 @@ class MandelbrotView(private val window: Long) {
         updateView()
     }
 
-    private fun updateView() {
+    fun updateView() {
         val height: Double = getOrthoHeight()
         val width: Double = height*3.0/2.0
         BOUND_LEFT = currentOrthoCoordinates.real-width/2
@@ -256,6 +219,10 @@ class MandelbrotView(private val window: Long) {
         BOUND_BOTTOM = BOUND_TOP - height
         BOUND_RIGHT = BOUND_LEFT + width
         redrawView()
+    }
+
+    fun setZoomLevelFromInt(zoomLevelInt: Int) {
+        currentZoomLevel = pow(1.0-ZOOM_INCREMENT, (zoomLevelInt-1).toDouble())
     }
 
     private fun getOrthoHeight(): Double { return currentZoomLevel * startHeight }
@@ -283,13 +250,12 @@ class MandelbrotView(private val window: Long) {
             1 -> "FP32"
             else -> "FP64"
         }
-        val curOrthoCoords = "${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag}"
-        GLFW.glfwSetWindowTitle(window, "Mandelbrot Set ($fpmode) :: ($curOrthoCoords) :: Zoom Level: $currentZoomLevelInt :: Max iterations: $maxTestIterations :: Color Mode: $currentColorMode $s")
+        GLFW.glfwSetWindowTitle(window, "Mandelbrot Set ($fpmode) :: $currentOrthoCoordinates :: Zoom Level: $currentZoomLevelInt :: Max iterations: $maxTestIterations :: Color Mode: $currentColorMode $s")
     }
 
-    fun redrawView() {
+    private fun redrawView() {
         val starttime = System.currentTimeMillis()
-        println("Generating simple Mandelbrot set at Coords: (${currentOrthoCoordinates.real}, ${currentOrthoCoordinates.imag})  Zoomlevel: $currentZoomLevelInt  Max iterations: $maxTestIterations  ::  Color Mode: $currentColorMode  (this could take a while)...")
+        if (!quietMode) println("Generating simple Mandelbrot set at Coords: $currentOrthoCoordinates  Zoomlevel: $currentZoomLevelInt  Max iterations: $maxTestIterations  ::  Color Mode: $currentColorMode  (this could take a while)...")
         updateTitle(":: Generating...")
         updateShaderUniforms()
         GL11.glBegin(GL11.GL_QUADS)
@@ -299,20 +265,30 @@ class MandelbrotView(private val window: Long) {
         GL11.glVertex2f(-1.0f, -1.0f)
         GL11.glEnd()
         //Using glFlush() instead of swapBuffers because there is a significant performance penalty when using swapBuffers
-        //with a slow fragment shader. As I understand it, swapBuffers waits until the preceding frame has drawn before swapping
+        //with a slow fragment shader. As I understand it, swapBuffers waits until the preceding frame has drawn before swapping.
         //Switching to glFlush() eliminates this overhead entirely. This performance issue only occurred when many changes piled up.
         GL11.glFlush()
         //Need this call otherwise our timer returns 0
         glFinish()
-        println("Done! Took ${(System.currentTimeMillis() - starttime)} milliseconds.")
+        if (!quietMode) println("Done! Took ${(System.currentTimeMillis() - starttime)} milliseconds.")
         updateTitle()
+    }
+
+    fun lockForZoom() {
+        controlsLocked = true
+        quietMode = true
+    }
+
+    fun unlockAfterZoom() {
+        controlsLocked = false
+        quietMode = false
     }
 }
 
 fun main(args: Array<String>) {
     window = glinit(WINDOW_SIZE_WIDTH, WINDOW_SIZE_HEIGHT, "Mandelbrot Set")
     val viewControl = MandelbrotView(window)
-    viewControl.redrawView()
+    viewControl.updateView()
     //and wait for any keyboard stuffs now
     while (!GLFW.glfwWindowShouldClose(window)) {
         GLFW.glfwPollEvents()

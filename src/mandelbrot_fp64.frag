@@ -42,13 +42,12 @@ float findEscapeVelocity(dvec2 c) {
     while (zRealSquared + zImagSquared < 4.0 && iter < ESCAPE_VELOCITY_TEST_ITERATIONS) {
         //Moved out of functions to increase speed... but it didnt.
         //I think this means the GLSL compiler was pretty smart and made these optimizations for us.
-        // Much thanks to https://randomascii.wordpress.com/2011/08/13/faster-fractals-through-algebra
-        //
-        //Z^2+c
-        z.y = (z.x * z.y);
-        z.y += z.y;
-        z.y += c.y;
-        z.x = (zRealSquared) - zImagSquared + c.x;
+        //Z^2
+        z.y = (z.x * z.y) + (z.y * z.x);
+        z.x = (zRealSquared) - zImagSquared;
+        //+c
+        //Adding complex numbers is the same as adding two vectors.
+        z = z + c;
         iter++;
         zRealSquared = z.x*z.x;
         zImagSquared = z.y*z.y;

@@ -1,5 +1,3 @@
-package org.kylesplace.kotlin.GLhelperfunctions
-
 import org.lwjgl.glfw.GLFW
 import org.lwjgl.opengl.GL
 import org.lwjgl.opengl.GL11
