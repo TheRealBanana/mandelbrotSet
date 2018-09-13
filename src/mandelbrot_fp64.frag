@@ -1,14 +1,16 @@
 #version 430
 #extension GL_ARB_gpu_shader_fp64 : require
 
-layout(location = 0) uniform int WINDOW_SIZE_WIDTH;
-layout(location = 1) uniform int WINDOW_SIZE_HEIGHT;
-layout(location = 2) uniform int CURRENT_COLOR_MODE;
-layout(location = 3) uniform int ESCAPE_VELOCITY_TEST_ITERATIONS;
-layout(location = 4) uniform double ORTHO_WIDTH;
-layout(location = 5) uniform double ORTHO_HEIGHT;
-layout(location = 6) uniform double BOUND_LEFT;
-layout(location = 7) uniform double BOUND_BOTTOM;
+uniform PARAMS {
+    int WINDOW_SIZE_WIDTH;
+    int WINDOW_SIZE_HEIGHT;
+    int CURRENT_COLOR_MODE;
+    int ESCAPE_VELOCITY_TEST_ITERATIONS;
+    double ORTHO_WIDTH;
+    double ORTHO_HEIGHT;
+    double BOUND_LEFT;
+    double BOUND_BOTTOM;
+};
 
 layout(location = 0) out vec4 fragColor;
 

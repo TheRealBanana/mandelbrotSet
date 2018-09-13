@@ -1,14 +1,16 @@
 #version 430
 #extension GL_ARB_gpu_shader_fp64 : require
 
-layout(location = 0) uniform int WINDOW_SIZE_WIDTH;
-layout(location = 1) uniform int WINDOW_SIZE_HEIGHT;
-layout(location = 2) uniform int CURRENT_COLOR_MODE;
-layout(location = 3) uniform int ESCAPE_VELOCITY_TEST_ITERATIONS;
-layout(location = 4) uniform float ORTHO_WIDTH;
-layout(location = 5) uniform float ORTHO_HEIGHT;
-layout(location = 6) uniform float BOUND_LEFT;
-layout(location = 7) uniform float BOUND_BOTTOM;
+uniform PARAMS {
+    int WINDOW_SIZE_WIDTH;
+    int WINDOW_SIZE_HEIGHT;
+    int CURRENT_COLOR_MODE;
+    int ESCAPE_VELOCITY_TEST_ITERATIONS;
+    float ORTHO_WIDTH;
+    float ORTHO_HEIGHT;
+    float BOUND_LEFT;
+    float BOUND_BOTTOM;
+};
 
 layout(location = 0) out vec4 fragColor;
 
@@ -42,13 +44,12 @@ float findEscapeVelocity(vec2 c) {
     while (zRealSquared + zImagSquared < 4.0 && iter < ESCAPE_VELOCITY_TEST_ITERATIONS) {
         //Moved out of functions to increase speed... but it didnt.
         //I think this means the GLSL compiler was pretty smart and made these optimizations for us.
-        // Much thanks to https://randomascii.wordpress.com/2011/08/13/faster-fractals-through-algebra
-        //
-        //Z^2+c
-        z.y = (z.x * z.y);
-        z.y += z.y;
-        z.y += c.y;
-        z.x = (zRealSquared) - zImagSquared + c.x;
+        //Z^2
+        z.y = (z.x * z.y) + (z.y * z.x);
+        z.x = (zRealSquared) - zImagSquared;
+        //+c
+        //Adding complex numbers is the same as adding two vectors.
+        z = z + c;
         iter++;
         zRealSquared = z.x*z.x;
         zImagSquared = z.y*z.y;

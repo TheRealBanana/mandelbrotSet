@@ -1,11 +1,10 @@
 import org.lwjgl.system.MemoryUtil.NULL
 import org.lwjgl.glfw.GLFW
-import org.lwjgl.opengl.GL11
 import org.lwjgl.BufferUtils
-import org.lwjgl.opengl.GL11.glFinish
-import org.lwjgl.opengl.GL20
-import org.lwjgl.opengl.GL40
+import org.lwjgl.opengl.*
 import java.lang.Math.pow
+import java.nio.IntBuffer
+
 
 //Zoom/pan increment stuffs
 var ZOOM_INCREMENT = 0.3 //increase by X%
@@ -29,12 +28,6 @@ data class ComplexNumber(val real: Double, val imag: Double) {
 }
 
 class MandelbrotView(private val window: Long) {
-    init {
-        GLFW.glfwSetKeyCallback(window, this::glfwKeypressCallback)
-        GLFW.glfwSetMouseButtonCallback(window, this::glfwMouseClickCallback)
-        setupShaders()
-
-    }
     private var currentColorMode: Int = 0 // color modes can be changed with the keyboard
     var currentZoomLevel: Double = 1.0 //zoomed out at 100%
     var currentZoomLevelInt: Int = 1 //Just for looks
@@ -53,17 +46,29 @@ class MandelbrotView(private val window: Long) {
 
 
     // Shader stuffs
-    private var uloc_WINDOW_SIZE_WIDTH: Int = 0
-    private var uloc_WINDOW_SIZE_HEIGHT: Int = 0
-    private var uloc_CURRENT_COLOR_MODE: Int = 0
-    private var uloc_ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 0
-    private var uloc_ORTHO_WIDTH: Int = 0
-    private var uloc_ORTHO_HEIGHT: Int = 0
-    private var uloc_BOUND_LEFT: Int = 0
-    private var uloc_BOUND_BOTTOM: Int = 0
+    private val uniformNames: Array<String> = arrayOf(
+            "WINDOW_SIZE_WIDTH",
+            "WINDOW_SIZE_HEIGHT",
+            "CURRENT_COLOR_MODE",
+            "ESCAPE_VELOCITY_TEST_ITERATIONS",
+            "ORTHO_WIDTH",
+            "ORTHO_HEIGHT",
+            "BOUND_LEFT",
+            "BOUND_BOTTOM"
+    )
+    private lateinit var uniformIndices: IntBuffer
+    private lateinit var uniformOffsets: IntBuffer
+    private var uniformBlockIndex = -1
+    private var finalBufferSize = -1
+    private val uniformBufferObject = GL15.glGenBuffers()
     private var FPMODE: Int = 0 //0 = fp32, 1 = fp64, 2 = fp128 (emulated, todo)
     private var shaderProgramFP64: Int = 0
     private var shaderProgramFP32: Int = 0
+    init {
+        GLFW.glfwSetKeyCallback(window, this::glfwKeypressCallback)
+        GLFW.glfwSetMouseButtonCallback(window, this::glfwMouseClickCallback)
+        setupShaders()
+    }
 
     private fun setupShaders() {
         //Lets create our shader programs and attach our shaders
@@ -86,38 +91,49 @@ class MandelbrotView(private val window: Long) {
             0 -> GL20.glUseProgram(shaderProgramFP64)
             1 -> GL20.glUseProgram(shaderProgramFP32)
         }
-        //Uniform locations only change on shader programing linking so this doesnt have to be run every loop iteration
-        //We dont need to get new location references for our other shaders because we manually set the uniform locations 
-        //to all be the same across the different shaders.
-        uloc_WINDOW_SIZE_WIDTH = GL20.glGetUniformLocation(shaderProgramFP64, "WINDOW_SIZE_WIDTH")
-        uloc_WINDOW_SIZE_HEIGHT = GL20.glGetUniformLocation(shaderProgramFP64, "WINDOW_SIZE_HEIGHT")
-        uloc_CURRENT_COLOR_MODE = GL20.glGetUniformLocation(shaderProgramFP64, "CURRENT_COLOR_MODE")
-        uloc_ESCAPE_VELOCITY_TEST_ITERATIONS = GL20.glGetUniformLocation(shaderProgramFP64, "ESCAPE_VELOCITY_TEST_ITERATIONS")
-        uloc_ORTHO_WIDTH = GL20.glGetUniformLocation(shaderProgramFP64, "ORTHO_WIDTH")
-        uloc_ORTHO_HEIGHT = GL20.glGetUniformLocation(shaderProgramFP64, "ORTHO_HEIGHT")
-        uloc_BOUND_LEFT = GL20.glGetUniformLocation(shaderProgramFP64, "BOUND_LEFT")
-        uloc_BOUND_BOTTOM = GL20.glGetUniformLocation(shaderProgramFP64, "BOUND_BOTTOM")
+
+        //Now set up the uniform locations so we can update the data later
+        uniformIndices = BufferUtils.createIntBuffer(uniformNames.size)
+        uniformOffsets = BufferUtils.createIntBuffer(uniformNames.size)
+        GL31.glGetUniformIndices(shaderProgramFP64, uniformNames, uniformIndices)
+        GL31.glGetActiveUniformsiv(shaderProgramFP64, uniformIndices, GL31.GL_UNIFORM_OFFSET, uniformOffsets)
+        //Now we have the indices for each of our uniforms and their offsets.
+        //We can use this information to correctly pack our final buffer
+        //figure out the size of our uniform block and then allocate the buffer
+        uniformBlockIndex = GL31.glGetUniformBlockIndex(shaderProgramFP64, "PARAMS")
+        finalBufferSize = GL31.glGetActiveUniformBlocki(shaderProgramFP64, uniformBlockIndex, GL31.GL_UNIFORM_BLOCK_DATA_SIZE)
+        //Finally, and we could do this anywhere, bind our uniformBufferObject to the GL_UNIFORM_BUFFER target
+        //and then bind our buffer to the index of our uniform block
+        GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, uniformBufferObject)
+        GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, uniformBlockIndex, uniformBufferObject)
+        GL15.glBufferData(GL31.GL_UNIFORM_BUFFER, finalBufferSize.toLong(), GL15.GL_DYNAMIC_DRAW)
     }
 
     private fun updateShaderUniforms() {
-        GL20.glUniform1i(uloc_WINDOW_SIZE_WIDTH, WINDOW_SIZE_WIDTH)
-        GL20.glUniform1i(uloc_WINDOW_SIZE_HEIGHT, WINDOW_SIZE_HEIGHT)
-        GL20.glUniform1i(uloc_CURRENT_COLOR_MODE, currentColorMode)
-        GL20.glUniform1i(uloc_ESCAPE_VELOCITY_TEST_ITERATIONS, maxTestIterations)
+        //Starting to get the hang of this whole buffer thing, although I'd much prefer c-style pointers
+        val finalBuffer = BufferUtils.createByteBuffer(finalBufferSize)
+
+        //going in the same order as uniformNames
+        finalBuffer.putInt(uniformOffsets.get(uniformNames.indexOf("WINDOW_SIZE_WIDTH")), WINDOW_SIZE_WIDTH)
+        finalBuffer.putInt(uniformOffsets.get(uniformNames.indexOf("WINDOW_SIZE_HEIGHT")), WINDOW_SIZE_HEIGHT)
+        finalBuffer.putInt(uniformOffsets.get(uniformNames.indexOf("CURRENT_COLOR_MODE")), currentColorMode)
+        finalBuffer.putInt(uniformOffsets.get(uniformNames.indexOf("ESCAPE_VELOCITY_TEST_ITERATIONS")), ESCAPE_VELOCITY_TEST_ITERATIONS)
         when (FPMODE) {
             0 -> {
-                GL40.glUniform1d(uloc_ORTHO_WIDTH, getOrthoWidth())
-                GL40.glUniform1d(uloc_ORTHO_HEIGHT, getOrthoHeight())
-                GL40.glUniform1d(uloc_BOUND_LEFT, BOUND_LEFT)
-                GL40.glUniform1d(uloc_BOUND_BOTTOM, BOUND_BOTTOM)
+                finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("ORTHO_WIDTH")), getOrthoWidth())
+                finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("ORTHO_HEIGHT")), getOrthoHeight())
+                finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("BOUND_LEFT")), BOUND_LEFT)
+                finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("BOUND_BOTTOM")), BOUND_BOTTOM)
             }
             1 -> {
-                GL20.glUniform1f(uloc_ORTHO_WIDTH, getOrthoWidth().toFloat())
-                GL20.glUniform1f(uloc_ORTHO_HEIGHT, getOrthoHeight().toFloat())
-                GL20.glUniform1f(uloc_BOUND_LEFT, BOUND_LEFT.toFloat())
-                GL20.glUniform1f(uloc_BOUND_BOTTOM, BOUND_BOTTOM.toFloat())
+                finalBuffer.putFloat(uniformOffsets.get(uniformNames.indexOf("ORTHO_WIDTH")), getOrthoWidth().toFloat())
+                finalBuffer.putFloat(uniformOffsets.get(uniformNames.indexOf("ORTHO_HEIGHT")), getOrthoHeight().toFloat())
+                finalBuffer.putFloat(uniformOffsets.get(uniformNames.indexOf("BOUND_LEFT")), BOUND_LEFT.toFloat())
+                finalBuffer.putFloat(uniformOffsets.get(uniformNames.indexOf("BOUND_BOTTOM")), BOUND_BOTTOM.toFloat())
             }
         }
+        //Since we are resetting everything, we can use 0 for our offset.
+        GL15.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 0, finalBuffer)
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -257,6 +273,7 @@ class MandelbrotView(private val window: Long) {
         val starttime = System.currentTimeMillis()
         if (!quietMode) println("Generating simple Mandelbrot set at Coords: $currentOrthoCoordinates  Zoomlevel: $currentZoomLevelInt  Max iterations: $maxTestIterations  ::  Color Mode: $currentColorMode  (this could take a while)...")
         updateTitle(":: Generating...")
+        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT)
         updateShaderUniforms()
         GL11.glBegin(GL11.GL_QUADS)
         GL11.glVertex2f(-1.0f, 1.0f)
@@ -269,7 +286,7 @@ class MandelbrotView(private val window: Long) {
         //Switching to glFlush() eliminates this overhead entirely. This performance issue only occurred when many changes piled up.
         GL11.glFlush()
         //Need this call otherwise our timer returns 0
-        glFinish()
+        GL11.glFinish()
         if (!quietMode) println("Done! Took ${(System.currentTimeMillis() - starttime)} milliseconds.")
         updateTitle()
     }
@@ -295,3 +312,4 @@ fun main(args: Array<String>) {
         Thread.sleep(100)
     }
 }
+
