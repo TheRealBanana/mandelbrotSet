@@ -59,8 +59,8 @@ class MandelbrotView(private val window: Long) {
             "BOUND_LEFT",
             "BOUND_BOTTOM"
     )
-    private var uniformIndices = BufferUtils.createIntBuffer(uniformNames.size)
-    private var uniformOffsets = BufferUtils.createIntBuffer(uniformNames.size)
+    private lateinit var uniformIndices: IntBuffer
+    private lateinit var uniformOffsets: IntBuffer
     private var uniformBlockIndex = -1
     private var finalBufferSize = -1
     private val uniformBufferObject = GL15.glGenBuffers()
@@ -96,28 +96,22 @@ class MandelbrotView(private val window: Long) {
             0 -> GL20.glUseProgram(shaderProgramFP64)
             1 -> GL20.glUseProgram(shaderProgramFP32)
         }
-        bindCurrentShaderProgramToBuffer()
-    }
 
-    private fun bindCurrentShaderProgramToBuffer() {
-        val shaderProgram = when(FPMODE) {
-            0 -> shaderProgramFP64
-            else -> shaderProgramFP32
-        }
         //Now set up the uniform locations so we can update the data later
-        uniformIndices.clear()
-        uniformOffsets.clear()
-        GL31.glGetUniformIndices(shaderProgram, uniformNames, uniformIndices)
-        GL31.glGetActiveUniformsiv(shaderProgram, uniformIndices, GL31.GL_UNIFORM_OFFSET, uniformOffsets)
+        uniformIndices = BufferUtils.createIntBuffer(uniformNames.size)
+        uniformOffsets = BufferUtils.createIntBuffer(uniformNames.size)
+        GL31.glGetUniformIndices(shaderProgramFP64, uniformNames, uniformIndices)
+        GL31.glGetActiveUniformsiv(shaderProgramFP64, uniformIndices, GL31.GL_UNIFORM_OFFSET, uniformOffsets)
         //Now we have the indices for each of our uniforms and their offsets.
         //We can use this information to correctly pack our final buffer
-        //figure out the size of our uniform block and then allocate the buffer
-        uniformBlockIndex = GL31.glGetUniformBlockIndex(shaderProgram, "PARAMS")
-        finalBufferSize = GL31.glGetActiveUniformBlocki(shaderProgram, uniformBlockIndex, GL31.GL_UNIFORM_BLOCK_DATA_SIZE)
-        //Finally, and we could do this anywhere, bind our uniformBufferObject to the GL_UNIFORM_BUFFER target
+        //figure out the index and size of our uniform block
+        uniformBlockIndex = GL31.glGetUniformBlockIndex(shaderProgramFP64, "PARAMS")
+        finalBufferSize = GL31.glGetActiveUniformBlocki(shaderProgramFP64, uniformBlockIndex, GL31.GL_UNIFORM_BLOCK_DATA_SIZE)
+        //Bind our uniformBufferObject to the GL_UNIFORM_BUFFER target
         //and then bind our buffer to the index of our uniform block
         GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, uniformBufferObject)
         GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, uniformBlockIndex, uniformBufferObject)
+        //To create the initial buffer we pass finalBufferSize instead of the data.
         GL45.glNamedBufferData(uniformBufferObject, finalBufferSize.toLong(), GL15.GL_DYNAMIC_DRAW)
     }
 
@@ -204,12 +198,10 @@ class MandelbrotView(private val window: Long) {
                 GLFW.GLFW_KEY_KP_1 -> {
                     FPMODE = 0
                     GL20.glUseProgram(shaderProgramFP64)
-                    bindCurrentShaderProgramToBuffer()
                 }
                 GLFW.GLFW_KEY_KP_2 -> {
                     FPMODE = 1
                     GL20.glUseProgram(shaderProgramFP32)
-                    bindCurrentShaderProgramToBuffer()
                 }
                 GLFW.GLFW_KEY_1 -> currentOrthoCoordinates = ComplexNumber(0.3866831889092910, 0.5696433852559384)
                 //Weird square thing @ 200 iterations and zoom ~75

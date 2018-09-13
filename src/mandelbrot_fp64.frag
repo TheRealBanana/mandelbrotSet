@@ -1,15 +1,18 @@
-#version 430
+#version 440
 #extension GL_ARB_gpu_shader_fp64 : require
 
-uniform PARAMS {
-    int WINDOW_SIZE_WIDTH;
-    int WINDOW_SIZE_HEIGHT;
-    int CURRENT_COLOR_MODE;
-    int ESCAPE_VELOCITY_TEST_ITERATIONS;
-    double ORTHO_WIDTH;
-    double ORTHO_HEIGHT;
-    double BOUND_LEFT;
-    double BOUND_BOTTOM;
+//Didnt need to specify the offsets or alignment explicitly here
+//the values I chose are the automatic values anyway, but its easier
+//see where I got the values for the fp32 shader.
+layout (std140, align = 4) uniform PARAMS {
+    layout (offset = 0) int WINDOW_SIZE_WIDTH;
+    layout (offset = 4) int WINDOW_SIZE_HEIGHT;
+    layout (offset = 8) int CURRENT_COLOR_MODE;
+    layout (offset = 12) int ESCAPE_VELOCITY_TEST_ITERATIONS;
+    layout (offset = 16) double ORTHO_WIDTH;
+    layout (offset = 24) double ORTHO_HEIGHT;
+    layout (offset = 32) double BOUND_LEFT;
+    layout (offset = 40) double BOUND_BOTTOM;
 };
 
 layout(location = 0) out vec4 fragColor;
