@@ -123,7 +123,7 @@ class MandelbrotView(private val window: Long) {
         finalBuffer.putInt(uniformOffsets.get(uniformNames.indexOf("WINDOW_SIZE_WIDTH")), WINDOW_SIZE_WIDTH)
         finalBuffer.putInt(uniformOffsets.get(uniformNames.indexOf("WINDOW_SIZE_HEIGHT")), WINDOW_SIZE_HEIGHT)
         finalBuffer.putInt(uniformOffsets.get(uniformNames.indexOf("CURRENT_COLOR_MODE")), currentColorMode)
-        finalBuffer.putInt(uniformOffsets.get(uniformNames.indexOf("ESCAPE_VELOCITY_TEST_ITERATIONS")), ESCAPE_VELOCITY_TEST_ITERATIONS)
+        finalBuffer.putInt(uniformOffsets.get(uniformNames.indexOf("ESCAPE_VELOCITY_TEST_ITERATIONS")), maxTestIterations)
         when (FPMODE) {
             0 -> {
                 finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("ORTHO_WIDTH")), getOrthoWidth())

@@ -1,5 +1,4 @@
 #version 440
-#extension GL_ARB_gpu_shader_fp64 : require
 
 layout (std140, align = 4) uniform PARAMS {
     layout (offset = 0) int WINDOW_SIZE_WIDTH;
