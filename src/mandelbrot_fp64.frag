@@ -1,9 +1,9 @@
 #version 440
 #extension GL_ARB_gpu_shader_fp64 : require
 
-//Didnt need to specify the offsets or alignment explicitly here
+//Didnt need to specify the offsets or alignment explicitly here since
 //the values I chose are the automatic values anyway, but its easier
-//see where I got the values for the fp32 shader.
+//to see where I got the values for the fp32 shader.
 layout (std140, align = 4) uniform PARAMS {
     layout (offset = 0) int WINDOW_SIZE_WIDTH;
     layout (offset = 4) int WINDOW_SIZE_HEIGHT;
@@ -30,15 +30,6 @@ vec3 hsv2rgb(vec3 c)
 float map(float value, float min1, float max1, float min2, float max2) {
   return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
 }
-dvec2 complexAdd(dvec2 c1, dvec2 c2) {
-    return dvec2(c1.x+c2.x, c1.y+c2.y);
-}
-dvec2 complexMulti(dvec2 c1, dvec2 c2) {
-    double imag = (c1.x * c2.y) + (c1.y * c2.x);
-    double real = (c1.x * c2.x) + (c1.y * c2.y * -1.0);
-    return dvec2(real,imag);
-}
-
 float findEscapeVelocity(dvec2 c) {
     dvec2 z = dvec2(0.0, 0.0);
     int iter = 1;

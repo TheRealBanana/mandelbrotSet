@@ -8,7 +8,7 @@ import java.io.IOException
 import javax.imageio.ImageIO
 
 //path to save the image sequence in. If it doesn't exist, we'll crash.
-const val SAVEPATH = "."
+const val SAVEPATH = "./zoomsequence/%coords% - %itermax%"
 
 //These special words will be replaced with actual data
 //You must include the frame number, otherwise each picture will overwrite the last.
@@ -16,13 +16,32 @@ const val SAVEPATH = "."
 // Coordinates = %coords%
 // Max Iterations = %itermax%
 //
-const val FILENAME_TEMPLATE = "Zoomsequence-%coords%-%itermax%_%framenum%.png"
+const val FILENAME_TEMPLATE = "Zoomsequence-%framenum%.png"
 
 //Controls the final zoom level and number of frames generated
 const val FINAL_ZOOM_LEVEL: Int = 80
 const val FRAME_COUNT: Int = FINAL_ZOOM_LEVEL*3 //3 frames per zoom level is sufficient
 
 class SaveZoomSequence(private val mandelhandle: MandelbrotView) {
+    private var savefilename: String = FILENAME_TEMPLATE
+    private var savepathname: String = SAVEPATH
+
+    fun updateStrings() {
+        savefilename = savefilename.replace("%coords%", mandelhandle.currentOrthoCoordinates.toString())
+        savefilename = savefilename.replace("%itermax%", mandelhandle.maxTestIterations.toString())
+        savepathname = savepathname.replace("%coords%", mandelhandle.currentOrthoCoordinates.toString())
+        savepathname = savepathname.replace("%itermax%", mandelhandle.maxTestIterations.toString())
+        //Check our folder exists first
+        if (!File(savepathname).exists()) {
+            try {
+                File(savepathname).mkdirs()
+            } catch (e: Exception){
+                println("Error creating zoom save dir, saving to current dir instead")
+                savepathname = "."
+            }
+        }
+    }
+
     fun savePngSequence(finalZoomLevelInt: Int = FINAL_ZOOM_LEVEL, numFrames: Int = FRAME_COUNT) {
         println("Launching zoom program...")
         mandelhandle.lockForZoom()
@@ -33,6 +52,7 @@ class SaveZoomSequence(private val mandelhandle: MandelbrotView) {
         ZOOM_INCREMENT /= numFrames.toFloat()/finalZoomLevelInt.toFloat()
         var z = 1
         mandelhandle.setZoomLevelFromInt(z)
+        updateStrings()
         while (mandelhandle.currentZoomLevel > finalZoomLevel && !GLFW.glfwWindowShouldClose(window)) {
             mandelhandle.currentZoomLevelInt = z
             mandelhandle.setZoomLevelFromInt(z)
@@ -43,7 +63,7 @@ class SaveZoomSequence(private val mandelhandle: MandelbrotView) {
         }
         ZOOM_INCREMENT = startzoomincrement
         mandelhandle.unlockAfterZoom()
-        println("Zoom program finished! Output frames are located in $SAVEPATH")
+        println("Zoom program finished! Output frames are located in $savepathname")
 
     }
 
@@ -56,11 +76,9 @@ class SaveZoomSequence(private val mandelhandle: MandelbrotView) {
         val bpp = 4 // Assuming a 32-bit display with a byte each for red, green, blue, and alpha.
         val buffer = BufferUtils.createByteBuffer(width * height * bpp)
         GL11.glReadPixels(0, 0, width, height, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer)
-        var savefilename = FILENAME_TEMPLATE
-        savefilename = savefilename.replace("%framenum%", frameNumber.toString())
-        savefilename = savefilename.replace("%coords%", mandelhandle.currentOrthoCoordinates.toString())
-        savefilename = savefilename.replace("%itermax%", ESCAPE_VELOCITY_TEST_ITERATIONS.toString())
-        val file = File(SAVEPATH, savefilename) // The file to save to.
+        //update the only dynamic data in our filename
+        val curname = savefilename.replace("%framenum%", frameNumber.toString())
+        val savefile = File(savepathname, curname) // The file to save to.
         val format = "png" // Example: "PNG" or "JPG"
         val image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
         for (x in 0 until width) {
@@ -77,7 +95,7 @@ class SaveZoomSequence(private val mandelhandle: MandelbrotView) {
             }
         }
         try {
-            ImageIO.write(image, format, file)
+            ImageIO.write(image, format, savefile)
         } catch (e: IOException) {
             e.printStackTrace()
         }

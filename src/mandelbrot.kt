@@ -7,7 +7,7 @@ import java.nio.IntBuffer
 
 //For performance testing. Runs everything as fast as it can and sets the zoom level
 //to 20 at the origin coords. This is the worst case scenario for performance.
-val PERFORMANCE_TESTING: Boolean = false
+const val PERFORMANCE_TESTING: Boolean = false
 
 //Zoom/pan increment stuffs
 var ZOOM_INCREMENT = 0.3 //increase by X%
@@ -34,9 +34,7 @@ class MandelbrotView(private val window: Long) {
     private var currentColorMode: Int = 0 // color modes can be changed with the keyboard
     var currentZoomLevel: Double = 1.0 //zoomed out at 100%
     var currentZoomLevelInt: Int = 1 //Just for looks
-    //Unzooming proved to be problematic so until I get some better maths this works
-    private val zoomStack: MutableList<Double> = mutableListOf()
-    private var maxTestIterations: Int = ESCAPE_VELOCITY_TEST_ITERATIONS
+    var maxTestIterations: Int = ESCAPE_VELOCITY_TEST_ITERATIONS
     private var startHeight: Double = 2.0
     private var BOUND_TOP: Double = 1.0
     private var BOUND_BOTTOM: Double = -1.0
@@ -152,10 +150,9 @@ class MandelbrotView(private val window: Long) {
                 val ybuff = BufferUtils.createDoubleBuffer(1)
                 GLFW.glfwGetCursorPos(window, xbuff, ybuff)
                 //So, just for funzies, GLFW's returned click coords use the top-left corner as the origin
-                //instead of the OpenGL standard of the bottom left. Easily dealth with however
+                //instead of the OpenGL standard of the bottom left. Easily dealt with however
                 val reversedYCoord: Int = WINDOW_SIZE_HEIGHT - ybuff.get(0).toInt()
-                val clickWindowCoords = WindowCoordinate(xbuff.get(0).toInt(), reversedYCoord)
-                val clickOrthoCoords: ComplexNumber = getOrthoCoordsFromWindowCoords(clickWindowCoords)
+                val clickOrthoCoords: ComplexNumber = getOrthoCoordsFromWindowCoords(WindowCoordinate(xbuff.get(0).toInt(), reversedYCoord))
                 currentOrthoCoordinates = clickOrthoCoords
                 println("Setting coordinates to: $clickOrthoCoords")
                 updateView()
@@ -213,6 +210,7 @@ class MandelbrotView(private val window: Long) {
                 GLFW.GLFW_KEY_5 -> currentOrthoCoordinates = ComplexNumber(0.001643721971153, -0.822467633298876)
                 GLFW.GLFW_KEY_6 -> currentOrthoCoordinates = ComplexNumber(-1.2032239372416502, 0.16503554579069707)
                 GLFW.GLFW_KEY_7 -> currentOrthoCoordinates = ComplexNumber(-0.7489804117521476, -0.050907824616219184)
+                GLFW.GLFW_KEY_8 -> currentOrthoCoordinates = ComplexNumber(-1.1159543391092177, 0.22496904622127784)
                 GLFW.GLFW_KEY_KP_0 -> resetAll()
                 GLFW.GLFW_KEY_Z -> zoomsaver.savePngSequence()
                 else -> return
@@ -228,7 +226,6 @@ class MandelbrotView(private val window: Long) {
         BOUND_LEFT = -2.0
         currentZoomLevel = 1.0
         currentZoomLevelInt = 1
-        zoomStack.clear()
         currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
         updateView()
     }

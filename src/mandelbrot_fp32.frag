@@ -26,15 +26,6 @@ vec3 hsv2rgb(vec3 c)
 float map(float value, float min1, float max1, float min2, float max2) {
   return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
 }
-vec2 complexAdd(vec2 c1, vec2 c2) {
-    return vec2(c1.x+c2.x, c1.y+c2.y);
-}
-vec2 complexMulti(vec2 c1, vec2 c2) {
-    float imag = (c1.x * c2.y) + (c1.y * c2.x);
-    float real = (c1.x * c2.x) + (c1.y * c2.y * -1.0);
-    return vec2(real,imag);
-}
-
 float findEscapeVelocity(vec2 c) {
     vec2 z = vec2(0.0, 0.0);
     int iter = 1;
