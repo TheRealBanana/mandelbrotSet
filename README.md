@@ -2,6 +2,9 @@
 
 More boredom means more coding. Decided to do what everyone and their grandma's has already done: Visualize the Mandelbrot Set. 
 
+Created some zooms through the iteration count instead of the magnification:
+All of them can be found here (albiet in a highly compressed form): https://imgur.com/a/a6kfIwd
+
 Tried to remake the "deep-zoom" animation on wikipedia. Couldnt zoom the whole way without arbitrary precision however.  
 [Animated "Deep Zoom" - 4000 iterations](https://i.imgur.com/QVky6WX.mp4)  
 [Animated "Deep Zoom" - 6000 iterations](https://i.imgur.com/Kk3XzEy.mp4)  
