@@ -213,12 +213,18 @@ class MandelbrotView(private val window: Long) {
                 GLFW.GLFW_KEY_8 -> currentOrthoCoordinates = ComplexNumber(-1.1159543391092177, 0.22496904622127784)
                 //Color zooms
                 GLFW.GLFW_KEY_9 -> currentOrthoCoordinates = ComplexNumber(0.25438986506872713, 0.00046726730914516275)
+                GLFW.GLFW_KEY_Q -> currentOrthoCoordinates = ComplexNumber(-0.7107128536934894, 0.28928443357282263)
                 GLFW.GLFW_KEY_KP_0 -> resetAll()
-                GLFW.GLFW_KEY_Z -> zoomsaver.savePngSequence(mode=1) // Magnification Zoom
-                GLFW.GLFW_KEY_X -> zoomsaver.savePngSequence(mode=2) // Color Zoom
+                GLFW.GLFW_KEY_Z -> zoomsaver.saveMagnificationZoom(save=mods) // Magnification Zoom
+                GLFW.GLFW_KEY_X -> zoomsaver.iterationZoom(save=mods) // Color Zoom
                 else -> return
             }
             updateView()
+        } else if ((action == GLFW.GLFW_PRESS || action == GLFW.GLFW_REPEAT) && controlsLocked) {
+            when (key) {
+                GLFW.GLFW_KEY_ESCAPE -> zoomsaver.cancelZoom()
+            }
+
         }
     }
 
