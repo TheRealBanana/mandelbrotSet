@@ -38,15 +38,6 @@ class SaveZoomSequence(private val mandelhandle: MandelbrotView) {
         savepathname = savepathname.replace("%coords%", mandelhandle.currentOrthoCoordinates.toString())
         savepathname = savepathname.replace("%itermax%", mandelhandle.maxTestIterations.toString())
         savepathname = savepathname.replace("%zoomlevel%", mandelhandle.currentZoomLevelInt.toString())
-        //Check our folder exists first
-        if (!File(savepathname).exists()) {
-            try {
-                File(savepathname).mkdirs()
-            } catch (e: Exception){
-                println("Error creating zoom save dir, saving to current dir instead")
-                savepathname = "."
-            }
-        }
     }
 
     fun iterationZoom(save: Int) {
@@ -121,6 +112,15 @@ class SaveZoomSequence(private val mandelhandle: MandelbrotView) {
         val buffer = BufferUtils.createByteBuffer(width * height * bpp)
         GL11.glReadPixels(0, 0, width, height, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer)
         //update the only dynamic data in our filename
+        //Check our folder exists first
+        if (!File(savepathname).exists()) {
+            try { //only if we are saving do we create a folder
+                File(savepathname).mkdirs()
+            } catch (e: Exception){
+                println("Error creating zoom save dir, saving to current dir instead")
+                savepathname = "."
+            }
+        }
         val curname = savefilename.replace("%framenum%", frameNumber.toString())
         val savefile = File(savepathname, curname) // The file to save to.
         val format = "png" // Example: "PNG" or "JPG"

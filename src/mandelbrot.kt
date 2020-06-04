@@ -2,8 +2,14 @@ import org.lwjgl.system.MemoryUtil.NULL
 import org.lwjgl.glfw.GLFW
 import org.lwjgl.BufferUtils
 import org.lwjgl.opengl.*
+import org.lwjgl.opengl.GL
 import java.lang.Math.pow
 import java.nio.IntBuffer
+import kotlin.system.exitProcess
+
+
+//This gets overridden at runtime
+var GL33MODE: Boolean = false
 
 //For performance testing. Runs everything as fast as it can and sets the zoom level
 //to 20 at the origin coords. This is the worst case scenario for performance.
@@ -68,6 +74,15 @@ class MandelbrotView(private val window: Long) {
     init {
         GLFW.glfwSetKeyCallback(window, this::glfwKeypressCallback)
         GLFW.glfwSetMouseButtonCallback(window, this::glfwMouseClickCallback)
+        //Check for fp64 support and fall back to GL33 mode if we dont have it.
+        if (!GL.getCapabilities().GL_ARB_gpu_shader_fp64) {
+            println("Your GPU doesn't support GL_ARB_gpu_shader_fp64. Attempting to fall back to 32-bit mode.")
+            GL33MODE = true
+        }
+        if (!GL.getCapabilities().OpenGL33) {
+            println("This program requires a GPU with support for OpenGL v3.3 or later.\nExiting...")
+            exitProcess(1)
+        }
         setupShaders()
         //Performance testing
         if (PERFORMANCE_TESTING) setZoomLevelFromInt(20)
@@ -75,42 +90,50 @@ class MandelbrotView(private val window: Long) {
 
     private fun setupShaders() {
         //Lets create our shader programs and attach our shaders
-        //Fragment Shaders, both 32-bit and 64-bit floating point
-        val fragmentShaderFP64 = createShaderFromFile("src/mandelbrot_fp64.frag", GL20.GL_FRAGMENT_SHADER)
+        //32-bit Fragment Shader floating point (64-bit below)
         val fragmentShaderFP32 = createShaderFromFile("src/mandelbrot_fp32.frag", GL20.GL_FRAGMENT_SHADER)
 
         //Shader program that contains all our shaders
-        shaderProgramFP64 = GL20.glCreateProgram()
         shaderProgramFP32 = GL20.glCreateProgram()
 
         //Finally attach our compiled shaders to our shader program and use it
-        GL20.glAttachShader(shaderProgramFP64, fragmentShaderFP64)
         GL20.glAttachShader(shaderProgramFP32, fragmentShaderFP32)
         //Linky linky
-        GL20.glLinkProgram(shaderProgramFP64)
         GL20.glLinkProgram(shaderProgramFP32)
         //Usey Usey
-        when (FPMODE) {
-            0 -> GL20.glUseProgram(shaderProgramFP64)
-            1 -> GL20.glUseProgram(shaderProgramFP32)
-        }
+        GL20.glUseProgram(shaderProgramFP32)
 
-        //Now set up the uniform locations so we can update the data later
+        //Check if we have OpenGL44 and use it if we do
+        if (!GL33MODE) {
+            val fragmentShaderFP64 = createShaderFromFile("src/mandelbrot_fp64.frag", GL20.GL_FRAGMENT_SHADER)
+            shaderProgramFP64 = GL20.glCreateProgram()
+            GL20.glAttachShader(shaderProgramFP64, fragmentShaderFP64)
+            GL20.glLinkProgram(shaderProgramFP64)
+            changeShaderProgram(shaderProgramFP64)
+        } else {
+            changeShaderProgram(shaderProgramFP32)
+        }
+    }
+    //Split off this function because we have to change the offsets/indices every time anyway.
+    private fun changeShaderProgram(shaderprogref: Int) {
+        //Set up the uniform locations so we can update the data later
+        //should test if the uniform indices actually change between fp32 and fp64 shaders.
         uniformIndices = BufferUtils.createIntBuffer(uniformNames.size)
         uniformOffsets = BufferUtils.createIntBuffer(uniformNames.size)
-        GL31.glGetUniformIndices(shaderProgramFP64, uniformNames, uniformIndices)
-        GL31.glGetActiveUniformsiv(shaderProgramFP64, uniformIndices, GL31.GL_UNIFORM_OFFSET, uniformOffsets)
+        GL31.glGetUniformIndices(shaderprogref, uniformNames, uniformIndices)
+        GL31.glGetActiveUniformsiv(shaderprogref, uniformIndices, GL31.GL_UNIFORM_OFFSET, uniformOffsets)
         //Now we have the indices for each of our uniforms and their offsets.
         //We can use this information to correctly pack our final buffer
         //figure out the index and size of our uniform block
-        uniformBlockIndex = GL31.glGetUniformBlockIndex(shaderProgramFP64, "PARAMS")
-        finalBufferSize = GL31.glGetActiveUniformBlocki(shaderProgramFP64, uniformBlockIndex, GL31.GL_UNIFORM_BLOCK_DATA_SIZE)
+        //The uniform block index may not change between fp32 and fp64, something to test
+        uniformBlockIndex = GL31.glGetUniformBlockIndex(shaderprogref, "PARAMS")
+        finalBufferSize = GL31.glGetActiveUniformBlocki(shaderprogref, uniformBlockIndex, GL31.GL_UNIFORM_BLOCK_DATA_SIZE)
         //Bind our uniformBufferObject to the GL_UNIFORM_BUFFER target
         //and then bind our buffer to the index of our uniform block
         GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, uniformBufferObject)
         GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, uniformBlockIndex, uniformBufferObject)
         //To create the initial buffer we pass finalBufferSize instead of the data.
-        GL45.glNamedBufferData(uniformBufferObject, finalBufferSize.toLong(), GL15.GL_DYNAMIC_DRAW)
+        GL33.glBufferData(GL31.GL_UNIFORM_BUFFER, finalBufferSize.toLong(), GL15.GL_DYNAMIC_DRAW)
     }
 
     private fun updateShaderUniforms() {
@@ -124,20 +147,22 @@ class MandelbrotView(private val window: Long) {
         finalBuffer.putInt(uniformOffsets.get(uniformNames.indexOf("ESCAPE_VELOCITY_TEST_ITERATIONS")), maxTestIterations)
         when (FPMODE) {
             0 -> {
-                finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("ORTHO_WIDTH")), getOrthoWidth())
-                finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("ORTHO_HEIGHT")), getOrthoHeight())
-                finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("BOUND_LEFT")), BOUND_LEFT)
-                finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("BOUND_BOTTOM")), BOUND_BOTTOM)
-            }
-            1 -> {
                 finalBuffer.putFloat(uniformOffsets.get(uniformNames.indexOf("ORTHO_WIDTH")), getOrthoWidth().toFloat())
                 finalBuffer.putFloat(uniformOffsets.get(uniformNames.indexOf("ORTHO_HEIGHT")), getOrthoHeight().toFloat())
                 finalBuffer.putFloat(uniformOffsets.get(uniformNames.indexOf("BOUND_LEFT")), BOUND_LEFT.toFloat())
                 finalBuffer.putFloat(uniformOffsets.get(uniformNames.indexOf("BOUND_BOTTOM")), BOUND_BOTTOM.toFloat())
             }
+            1 -> {
+                if (!GL33MODE) {
+                    finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("ORTHO_WIDTH")), getOrthoWidth())
+                    finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("ORTHO_HEIGHT")), getOrthoHeight())
+                    finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("BOUND_LEFT")), BOUND_LEFT)
+                    finalBuffer.putDouble(uniformOffsets.get(uniformNames.indexOf("BOUND_BOTTOM")), BOUND_BOTTOM)
+                }
+            }
         }
         //Since we are resetting everything, we can use 0 for our offset.
-        GL45.glNamedBufferSubData(uniformBufferObject, 0, finalBuffer)
+        GL33.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 0, finalBuffer)
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -194,11 +219,13 @@ class MandelbrotView(private val window: Long) {
                 //Change floating-point precision mode. only mode 0 and 1 for now
                 GLFW.GLFW_KEY_KP_1 -> {
                     FPMODE = 0
-                    GL20.glUseProgram(shaderProgramFP64)
+                    changeShaderProgram(shaderProgramFP32)
                 }
                 GLFW.GLFW_KEY_KP_2 -> {
-                    FPMODE = 1
-                    GL20.glUseProgram(shaderProgramFP32)
+                    if (!GL33MODE) {
+                        FPMODE = 1
+                        changeShaderProgram(shaderProgramFP64)
+                    }
                 }
                 GLFW.GLFW_KEY_1 -> currentOrthoCoordinates = ComplexNumber(0.3866831889092910, 0.5696433852559384)
                 //Weird square thing @ 200 iterations and zoom ~75
@@ -276,7 +303,7 @@ class MandelbrotView(private val window: Long) {
 
     private fun updateTitle(s: String = "") {
         val fpmode: String = when (FPMODE) {
-            1 -> "FP32"
+            0 -> "FP32"
             else -> "FP64"
         }
         GLFW.glfwSetWindowTitle(window, "Mandelbrot Set ($fpmode) :: $currentOrthoCoordinates :: Zoom Level: $currentZoomLevelInt :: Max iterations: $maxTestIterations :: Color Mode: $currentColorMode $s")
