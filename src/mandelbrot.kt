@@ -78,6 +78,10 @@ class MandelbrotView(private val window: Long) {
         if (!GL.getCapabilities().GL_ARB_gpu_shader_fp64) {
             println("Your GPU doesn't support GL_ARB_gpu_shader_fp64. Attempting to fall back to 32-bit mode.")
             GL33MODE = true
+            FPMODE = 0
+        } else {
+            println("Using fp64 extension.")
+            FPMODE = 1
         }
         if (!GL.getCapabilities().OpenGL33) {
             println("This program requires a GPU with support for OpenGL v3.3 or later.\nExiting...")
@@ -100,8 +104,6 @@ class MandelbrotView(private val window: Long) {
         GL20.glAttachShader(shaderProgramFP32, fragmentShaderFP32)
         //Linky linky
         GL20.glLinkProgram(shaderProgramFP32)
-        //Usey Usey
-        GL20.glUseProgram(shaderProgramFP32)
 
         //Check if we have OpenGL44 and use it if we do
         if (!GL33MODE) {
@@ -116,6 +118,8 @@ class MandelbrotView(private val window: Long) {
     }
     //Split off this function because we have to change the offsets/indices every time anyway.
     private fun changeShaderProgram(shaderprogref: Int) {
+        //Usey Use
+        GL20.glUseProgram(shaderprogref)
         //Set up the uniform locations so we can update the data later
         //should test if the uniform indices actually change between fp32 and fp64 shaders.
         uniformIndices = BufferUtils.createIntBuffer(uniformNames.size)
@@ -133,7 +137,7 @@ class MandelbrotView(private val window: Long) {
         GL15.glBindBuffer(GL31.GL_UNIFORM_BUFFER, uniformBufferObject)
         GL30.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, uniformBlockIndex, uniformBufferObject)
         //To create the initial buffer we pass finalBufferSize instead of the data.
-        GL33.glBufferData(GL31.GL_UNIFORM_BUFFER, finalBufferSize.toLong(), GL15.GL_DYNAMIC_DRAW)
+        GL15.glBufferData(GL31.GL_UNIFORM_BUFFER, finalBufferSize.toLong(), GL15.GL_DYNAMIC_DRAW)
     }
 
     private fun updateShaderUniforms() {
@@ -162,7 +166,7 @@ class MandelbrotView(private val window: Long) {
             }
         }
         //Since we are resetting everything, we can use 0 for our offset.
-        GL33.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 0, finalBuffer)
+        GL15.glBufferSubData(GL31.GL_UNIFORM_BUFFER, 0, finalBuffer)
     }
 
     @Suppress("UNUSED_PARAMETER")
