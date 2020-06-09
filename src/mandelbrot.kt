@@ -22,8 +22,10 @@ const val ITERATION_INCREMENT = 20
 
 //GL STUFFS
 //Locking aspect ratio to 3:2
-const val WINDOW_SIZE_WIDTH = 1680
-const val WINDOW_SIZE_HEIGHT = (WINDOW_SIZE_WIDTH*(2.0/3.0)).toInt()
+
+const val WINDOW_SIZE_HEIGHT = 800
+const val WINDOW_SIZE_WIDTH = (WINDOW_SIZE_HEIGHT/(2.0/3.0)).toInt()
+
 var window: Long = NULL
 
 //How many iterations should we run before we are certain of an escape velocity?
@@ -71,6 +73,7 @@ class MandelbrotView(private val window: Long) {
     private var FPMODE: Int = 0 //0 = fp32, 1 = fp64, 2 = fp128 (emulated, todo)
     private var shaderProgramFP64: Int = 0
     private var shaderProgramFP32: Int = 0
+    private var BIFMODE: Boolean = false
     init {
         GLFW.glfwSetKeyCallback(window, this::glfwKeypressCallback)
         GLFW.glfwSetMouseButtonCallback(window, this::glfwMouseClickCallback)
@@ -248,6 +251,10 @@ class MandelbrotView(private val window: Long) {
                 GLFW.GLFW_KEY_KP_0 -> resetAll()
                 GLFW.GLFW_KEY_Z -> zoomsaver.saveMagnificationZoom(save=mods) // Magnification Zoom
                 GLFW.GLFW_KEY_X -> zoomsaver.iterationZoom(save=mods) // Color Zoom
+                GLFW.GLFW_KEY_B -> {
+                    BIFMODE = true
+                    generateBifurcationDiagram()
+                }
                 else -> return
             }
             updateView()
@@ -260,6 +267,7 @@ class MandelbrotView(private val window: Long) {
     }
 
     private fun resetAll() {
+        resetDisplay()
         currentColorMode = 0
         maxTestIterations = ESCAPE_VELOCITY_TEST_ITERATIONS
         BOUND_TOP = 1.0
@@ -267,17 +275,27 @@ class MandelbrotView(private val window: Long) {
         currentZoomLevel = 1.0
         currentZoomLevelInt = 1
         currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
+        BIFMODE = false
+        if (!GL33MODE) {
+            FPMODE = 1
+            changeShaderProgram(shaderProgramFP64)
+        } else {
+            FPMODE = 0
+            changeShaderProgram(shaderProgramFP32)
+        }
         updateView()
     }
 
     fun updateView() {
-        val height: Double = getOrthoHeight()
-        val width: Double = height*3.0/2.0
-        BOUND_LEFT = currentOrthoCoordinates.real-width/2
-        BOUND_TOP = currentOrthoCoordinates.imag+height/2
-        BOUND_BOTTOM = BOUND_TOP - height
-        BOUND_RIGHT = BOUND_LEFT + width
-        redrawView()
+        if (!BIFMODE) {
+            val height: Double = getOrthoHeight()
+            val width: Double = height * 3.0 / 2.0
+            BOUND_LEFT = currentOrthoCoordinates.real - width / 2
+            BOUND_TOP = currentOrthoCoordinates.imag + height / 2
+            BOUND_BOTTOM = BOUND_TOP - height
+            BOUND_RIGHT = BOUND_LEFT + width
+            redrawView()
+        }
     }
 
     fun setZoomLevelFromInt(zoomLevelInt: Int) {
@@ -344,6 +362,38 @@ class MandelbrotView(private val window: Long) {
         controlsLocked = false
         quietMode = false
     }
+
+    // Lots of help from this page:
+    // https://users.math.yale.edu/public_html/People/frame/Fractals/MandelSet/MandelDef/LogisticMand/LogisticMand.html
+    //
+    // Didn't think a shader would be great for this but I think it would work with the current shaders.
+    // We already calculated these values in the shader anyway, we just have to send the right ones back.
+    // Or we just switch modes inside the shader and use that data. The problem is you can't set other pixels
+    // besides the one you are working on inside the frag shader (I think). Will have to test. .
+    fun generateBifurcationDiagram() {
+        println("Bifurcation Diagram Mode")
+        GL20.glUseProgram(0) //Unload current shader
+        GL11.glLoadIdentity()
+        GL11.glOrtho(-2.0, 0.25, -2.0, 2.0, -1.0, 1.0)
+        GL11.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
+        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT)
+        GL11.glPointSize(1.0f)
+        GL11.glColor3f(1.0f, 0.0f, 0.0f)
+        GL11.glBegin(GL11.GL_POINTS)
+
+        for (i in -2000..250) { // -2 < c < 0.25
+            val c: Double = i.toFloat()/1000.0 // iterate by 1/1000
+            var y: Double = 0.0
+            for (j in 0..200) {
+                y = pow(y, 2.0) + c
+                if (j > 150) GL11.glVertex2d(c, y)
+            }
+        }
+        GL11.glEnd()
+        GL11.glFinish()
+        GL11.glFlush()
+    }
+
 }
 
 fun main(args: Array<String>) {

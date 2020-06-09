@@ -62,3 +62,5 @@ fabric.properties
 
 zoomsequence
 .idea/encodings.xml
+.idea/misc.xml
+mandelbrotSet.iml

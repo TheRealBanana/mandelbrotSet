@@ -44,3 +44,9 @@ fun glinit(windowSizeW: Int, windowSizeH: Int, windowTitle: String = "Untitled W
     
     return window
 }
+
+fun resetDisplay() {
+    GL11.glClearColor(1.0f, 1.0f, 1.0f, 1.0f)
+    GL11.glLoadIdentity()
+    GL11.glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0)
+}
