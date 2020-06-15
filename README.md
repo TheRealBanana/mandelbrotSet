@@ -24,3 +24,9 @@ Implemented a basic color ramp in HSV space varying only the hue using the norma
 ![Screenshot](https://i.imgur.com/Wa1MHxC.png)
 I had no clue how to convert HSV to RGB values but found some awesome code on lolengine.net that works perfectly.
 ![Screenshot](https://image.ibb.co/nnOvtU/mandelbrot_colorscheme_hsvramp2.png)
+
+Recently added a bifurcation diagram mode (shortcut key is B). Here's a few pictures of it:
+![Screenshot](https://i.imgur.com/m9iJi5j.png)
+![Screenshot](https://i.imgur.com/sD61wuv.png)
+![Screenshot](https://i.imgur.com/rlhxM7K.png)
+The yellow box shows the area we are zooming into for the next image.

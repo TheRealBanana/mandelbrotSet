@@ -265,7 +265,7 @@ class MandelbrotView(private val window: Long) {
                     GL20.glUseProgram(0) //Unload current shader
                     ASPECT_RATIO = 0.5625
                     startHeight = 4.0
-                    maxTestIterations = 2000
+                    maxTestIterations = 600
                     BOUND_LEFT = -2.0
                     BOUND_RIGHT = 0.25
                     BOUND_BOTTOM = -2.0
