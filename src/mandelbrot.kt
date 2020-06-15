@@ -3,8 +3,9 @@ import org.lwjgl.glfw.GLFW
 import org.lwjgl.BufferUtils
 import org.lwjgl.opengl.*
 import org.lwjgl.opengl.GL
-import java.lang.Math.pow
 import java.nio.IntBuffer
+import kotlin.math.max
+import kotlin.math.pow
 import kotlin.system.exitProcess
 
 
@@ -23,7 +24,7 @@ const val ITERATION_INCREMENT = 20
 //GL STUFFS
 //Locking aspect ratio to 3:2
 
-const val WINDOW_SIZE_HEIGHT = 800
+const val WINDOW_SIZE_HEIGHT = 1000
 const val WINDOW_SIZE_WIDTH = (WINDOW_SIZE_HEIGHT/(2.0/3.0)).toInt()
 
 var window: Long = NULL
@@ -32,13 +33,14 @@ var window: Long = NULL
 const val ESCAPE_VELOCITY_TEST_ITERATIONS: Int = 500
 
 data class WindowCoordinate(val x: Int, val y: Int)
-data class ComplexNumber(val real: Double, val imag: Double) {
+data class ComplexNumber(var real: Double, var imag: Double) {
     override fun toString(): String {
         return "($real, $imag)"
     }
 }
 
 class MandelbrotView(private val window: Long) {
+    private var ASPECT_RATIO: Double = 3.0/2.0 // Will change for bifurcation mode
     private var currentColorMode: Int = 0 // color modes can be changed with the keyboard
     var currentZoomLevel: Double = 1.0 //zoomed out at 100%
     var currentZoomLevelInt: Int = 1 //Just for looks
@@ -183,8 +185,10 @@ class MandelbrotView(private val window: Long) {
                 GLFW.glfwGetCursorPos(window, xbuff, ybuff)
                 //So, just for funzies, GLFW's returned click coords use the top-left corner as the origin
                 //instead of the OpenGL standard of the bottom left. Easily dealt with however
-                val reversedYCoord: Int = WINDOW_SIZE_HEIGHT - ybuff.get(0).toInt()
-                val clickOrthoCoords: ComplexNumber = getOrthoCoordsFromWindowCoords(WindowCoordinate(xbuff.get(0).toInt(), reversedYCoord))
+                val ycoord = ybuff.get(0).toInt()
+                val xcoord = xbuff.get(0).toInt()
+                val reversedYCoord: Int = WINDOW_SIZE_HEIGHT - ycoord
+                val clickOrthoCoords: ComplexNumber = getOrthoCoordsFromWindowCoords(WindowCoordinate(xcoord, reversedYCoord))
                 currentOrthoCoordinates = clickOrthoCoords
                 println("Setting coordinates to: $clickOrthoCoords")
                 updateView()
@@ -197,10 +201,10 @@ class MandelbrotView(private val window: Long) {
             //needed later
             val moveAmount: Double = currentZoomLevel*startHeight/2.0*PAN_PCT_INCREMENT
             when (key) {
-                GLFW.GLFW_KEY_UP -> currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real, currentOrthoCoordinates.imag + moveAmount)
-                GLFW.GLFW_KEY_DOWN -> currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real, currentOrthoCoordinates.imag - moveAmount)
-                GLFW.GLFW_KEY_LEFT -> currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real - moveAmount, currentOrthoCoordinates.imag)
-                GLFW.GLFW_KEY_RIGHT -> currentOrthoCoordinates = ComplexNumber(currentOrthoCoordinates.real + moveAmount, currentOrthoCoordinates.imag)
+                GLFW.GLFW_KEY_UP -> currentOrthoCoordinates.imag += moveAmount
+                GLFW.GLFW_KEY_DOWN -> currentOrthoCoordinates.imag -= moveAmount
+                GLFW.GLFW_KEY_LEFT -> currentOrthoCoordinates.real -= moveAmount
+                GLFW.GLFW_KEY_RIGHT -> currentOrthoCoordinates.real += moveAmount
                 GLFW.GLFW_KEY_KP_ADD -> {
                     setZoomLevelFromInt(--currentZoomLevelInt)
                 }
@@ -248,12 +252,26 @@ class MandelbrotView(private val window: Long) {
                 //Color zooms
                 GLFW.GLFW_KEY_9 -> currentOrthoCoordinates = ComplexNumber(0.25438986506872713, 0.00046726730914516275)
                 GLFW.GLFW_KEY_Q -> currentOrthoCoordinates = ComplexNumber(-0.7107128536934894, 0.28928443357282263)
+                //Center of spider-web thingy from the bifurcation diagram (-1.5436890198239954, -0.8392866692155266)?
+                GLFW.GLFW_KEY_0 -> currentOrthoCoordinates = ComplexNumber(-1.5436890198239954, 0.0)
                 GLFW.GLFW_KEY_KP_0 -> resetAll()
                 GLFW.GLFW_KEY_Z -> zoomsaver.saveMagnificationZoom(save=mods) // Magnification Zoom
                 GLFW.GLFW_KEY_X -> zoomsaver.iterationZoom(save=mods) // Color Zoom
                 GLFW.GLFW_KEY_B -> {
+                    resetAll()
+                    println("Bifurcation Diagram Mode Starting")
+                    //Standard values that need to be changed before we can display correctly
                     BIFMODE = true
-                    generateBifurcationDiagram()
+                    GL20.glUseProgram(0) //Unload current shader
+                    ASPECT_RATIO = 0.5625
+                    startHeight = 4.0
+                    maxTestIterations = 2000
+                    BOUND_LEFT = -2.0
+                    BOUND_RIGHT = 0.25
+                    BOUND_BOTTOM = -2.0
+                    BOUND_TOP = 2.0
+                    currentOrthoCoordinates = ComplexNumber(((BOUND_RIGHT + BOUND_LEFT)/2.0), ((BOUND_TOP + BOUND_BOTTOM)/2.0))
+                    updateView()
                 }
                 else -> return
             }
@@ -262,7 +280,6 @@ class MandelbrotView(private val window: Long) {
             when (key) {
                 GLFW.GLFW_KEY_ESCAPE -> zoomsaver.cancelZoom()
             }
-
         }
     }
 
@@ -270,8 +287,10 @@ class MandelbrotView(private val window: Long) {
         resetDisplay()
         currentColorMode = 0
         maxTestIterations = ESCAPE_VELOCITY_TEST_ITERATIONS
+        ASPECT_RATIO = 3.0/2.0
         BOUND_TOP = 1.0
         BOUND_LEFT = -2.0
+        startHeight = 2.0
         currentZoomLevel = 1.0
         currentZoomLevelInt = 1
         currentOrthoCoordinates = ComplexNumber(-0.5, 0.0)
@@ -287,24 +306,25 @@ class MandelbrotView(private val window: Long) {
     }
 
     fun updateView() {
-        if (!BIFMODE) {
-            val height: Double = getOrthoHeight()
-            val width: Double = height * 3.0 / 2.0
-            BOUND_LEFT = currentOrthoCoordinates.real - width / 2
-            BOUND_TOP = currentOrthoCoordinates.imag + height / 2
-            BOUND_BOTTOM = BOUND_TOP - height
-            BOUND_RIGHT = BOUND_LEFT + width
-            redrawView()
-        }
+        val height: Double = getOrthoHeight()
+        val width: Double = height * ASPECT_RATIO
+        BOUND_LEFT = currentOrthoCoordinates.real - width / 2
+        BOUND_TOP = currentOrthoCoordinates.imag + height / 2
+        BOUND_BOTTOM = BOUND_TOP - height
+        BOUND_RIGHT = BOUND_LEFT + width
+        if (!BIFMODE) redrawView()
+        else generateBifurcationDiagram()
+        updateTitle()
+
     }
 
     fun setZoomLevelFromInt(zoomLevelInt: Int) {
-        currentZoomLevel = pow(1.0-ZOOM_INCREMENT, (zoomLevelInt-1).toDouble())
+        currentZoomLevel = (1.0 - ZOOM_INCREMENT).pow((zoomLevelInt - 1).toDouble())
         currentZoomLevelInt = zoomLevelInt
     }
 
     private fun getOrthoHeight(): Double { return currentZoomLevel * startHeight }
-    private fun getOrthoWidth(): Double { return getOrthoHeight()*3.0/2.0}
+    private fun getOrthoWidth(): Double { return getOrthoHeight()*ASPECT_RATIO}
     private fun getOrthoCoordsFromWindowCoords(coords: WindowCoordinate): ComplexNumber {
         // The max and min bounds are taken from our BOUND_* variables we used to pass to glOrtho()
         // So to go from window cords to our ortho coords is:
@@ -328,7 +348,11 @@ class MandelbrotView(private val window: Long) {
             0 -> "FP32"
             else -> "FP64"
         }
-        GLFW.glfwSetWindowTitle(window, "Mandelbrot Set ($fpmode) :: $currentOrthoCoordinates :: Zoom Level: $currentZoomLevelInt :: Max iterations: $maxTestIterations :: Color Mode: $currentColorMode $s")
+        val genmode: String = when(BIFMODE) {
+            true -> "Bifurcation Diagram"
+            false -> "Mandelbrot Set ($fpmode)"
+        }
+        GLFW.glfwSetWindowTitle(window, "$genmode :: $currentOrthoCoordinates :: Zoom Level: $currentZoomLevelInt :: Max iterations: $maxTestIterations :: Color Mode: $currentColorMode $s")
     }
 
     private fun redrawView() {
@@ -350,7 +374,6 @@ class MandelbrotView(private val window: Long) {
         //Need this call otherwise our timer returns 0
         GL11.glFinish()
         if (!quietMode) println("Done! Took ${(System.currentTimeMillis() - starttime)} milliseconds.")
-        updateTitle()
     }
 
     fun lockForZoom() {
@@ -370,23 +393,26 @@ class MandelbrotView(private val window: Long) {
     // We already calculated these values in the shader anyway, we just have to send the right ones back.
     // Or we just switch modes inside the shader and use that data. The problem is you can't set other pixels
     // besides the one you are working on inside the frag shader (I think). Will have to test. .
-    fun generateBifurcationDiagram() {
-        println("Bifurcation Diagram Mode")
-        GL20.glUseProgram(0) //Unload current shader
+    private fun generateBifurcationDiagram() {
         GL11.glLoadIdentity()
-        GL11.glOrtho(-2.0, 0.25, -2.0, 2.0, -1.0, 1.0)
+        GL11.glOrtho(BOUND_LEFT, BOUND_RIGHT, BOUND_BOTTOM, BOUND_TOP, -1.0, 1.0)
         GL11.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT)
         GL11.glPointSize(1.0f)
         GL11.glColor3f(1.0f, 0.0f, 0.0f)
         GL11.glBegin(GL11.GL_POINTS)
 
-        for (i in -2000..250) { // -2 < c < 0.25
-            val c: Double = i.toFloat()/1000.0 // iterate by 1/1000
-            var y: Double = 0.0
-            for (j in 0..200) {
-                y = pow(y, 2.0) + c
-                if (j > 150) GL11.glVertex2d(c, y)
+        // Even though using the horizontal pixel count gives us per-pixel accuracy, we are still missing data between
+        // the pixels. This is easily seen in spots where a single value splits into two; the vertical sections of the
+        // lines are sparsely populated. We need to figure out anti-aliasing or maybe we draw using the vertical axis
+        // instead which should give more accuracy (I think). Probably will also introduce other artifacts though.
+        for (i in 0..WINDOW_SIZE_WIDTH) {
+            val c = ((i.toDouble()/WINDOW_SIZE_WIDTH)*getOrthoWidth()) + BOUND_LEFT
+            var y = 0.0
+            for (j in 0..maxTestIterations) {
+                y = y.pow(2.0) + c
+                // Only draw the last 1000 iterations and never any less than 5000 iterations
+                if (j > max(500, maxTestIterations-1000)) GL11.glVertex2d(c, y)
             }
         }
         GL11.glEnd()
